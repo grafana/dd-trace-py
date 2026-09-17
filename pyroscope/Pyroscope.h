@@ -104,17 +104,32 @@ namespace Pyroscope
     /* Upstream's ddog_prof_StringId2; ours indexes the table in rust/src/encode/interner.rs. */
     using string_id = FFIInternedString;
 
-    inline string_id intern_utf8_string(const std::string_view s)
+    /* Stand-in for Datadog's intern_string.
+     *
+     * Interns into one process-wide table shared by every profiler in this
+     * extension, so an id minted here is comparable across the memory
+     * profiler and the vendored CPU stack sampler.
+     *
+     * Infallible, unlike Datadog::intern_string, which returns std::optional
+     * because libdatadog's Profiles Dictionary can fail to allocate. Every
+     * failure mode here -- null or empty input, poisoned table lock -- yields
+     * index 0, the id of the empty string, which is itself a valid id. So
+     * callers must NOT guard the result: there is no failure to handle, and
+     * treating 0 as failure would wrongly discard genuinely empty strings
+     * (an empty module name, say).
+     *
+     * The id stays valid until the table is cleared at agent teardown.
+     * Anything caching ids across samples (see StackRenderer::string_id_cache)
+     * must be discarded whenever the table is, or stale indices will silently
+     * resolve to whatever string later occupies them. The invariant is spelled
+     * out on interner::clear in rust/src/encode/interner.rs.
+     *
+     * `inline` is required: this header is included from several translation
+     * units (memalloc's _memalloc_tb.h, the stack sampler's sampler.cpp and
+     * stack_renderer.cpp), and without it each one emits the symbol. */
+    inline string_id intern_string(const std::string_view s)
     {
-        return pyroscope_string_table_intern_utf8(FFIStringView{
-            .data = s.data(),
-            .len = s.length()
-        });
-    }
-
-    inline string_id intern_ascii_string(const std::string_view s)
-    {
-        return pyroscope_string_table_intern_ascii(FFIStringView{
+        return pyroscope_string_table_intern_string(FFIStringView{
             .data = s.data(),
             .len = s.length()
         });
@@ -124,49 +139,31 @@ namespace Pyroscope
     {
         std::vector<FFIFrame> frames;
         size_t max_nframes;
-        PprofBuilderType builder_type;
-        FFISampleValues values{};
-        bool truncated = false;
-
-        void push_frame_impl(const string_id function_name, const string_id file_name, const int line)
-        {
-            frames.emplace_back(
-                FFIFrame{
-                    .function_name = function_name,
-                    .file_name = file_name,
-                    .line = line,
-                }
-            );
-        }
+        FFIHeapSampleValues values{};
 
     public:
-        Sample(const size_t _max_nframes, const PprofBuilderType _builder_type)
-            : max_nframes{_max_nframes}, builder_type{_builder_type}
+        explicit Sample(const size_t max_nframes) : max_nframes{max_nframes}
         {
-            frames.reserve(max_nframes + 1);
+            frames.reserve(max_nframes);
         }
 
 
-        void push_frame(const string_id function_name, const string_id file_name, const int line)
+        void push_frame(const std::string_view function_name, const std::string_view file_name, int _, const int line)
         {
-            if (frames.size() >= max_nframes)
+            if (frames.size() == max_nframes)
             {
                 incr_dropped_frames();
-                return;
             }
-            push_frame_impl(function_name, file_name, line);
-        }
-
-
-        void push_frame(const std::string_view function_name, const std::string_view file_name,
-                        [[maybe_unused]] int address, const int line)
-        {
-            if (frames.size() >= max_nframes)
+            else
             {
-                incr_dropped_frames();
-                return;
+                frames.emplace_back(
+                    FFIFrame{
+                        .function_name = intern_string(function_name),
+                        .file_name = intern_string(file_name),
+                        .line = line,
+                    }
+                );
             }
-            push_frame(intern_ascii_string(function_name), intern_ascii_string(file_name), line);
         }
 
 
@@ -190,21 +187,20 @@ namespace Pyroscope
 
         void clear()
         {
-            values = {};
+            values.alloc_space = 0;
+            values.alloc_count = 0;
+            values.heap_space = 0;
+            values.heap_count = 0;
             frames.clear();
-            truncated = false;
         }
 
-        void export_sample()
+        void export_sample() const
         {
-            if (truncated)
-            {
-                static constexpr std::string_view marker = "<truncated>";
-                const string_id id = intern_ascii_string(marker);
-                push_frame_impl(id, id, 0);
-                truncated = false;
-            }
-            pyroscope_push_sample(builder_type, frames.data(), frames.size(), &values);
+            pyroscope_memprof_push_sample(FFISample{
+                .frames = frames.data(),
+                .len = frames.size(),
+                .values = values,
+            });
         }
 
         void push_threadinfo([[maybe_unused]] int64_t thread_id,
@@ -214,11 +210,9 @@ namespace Pyroscope
             // no-op
         }
 
-        // Pyroscope patch: appends one countless "<truncated>" frame where
-        // upstream appends "<N frame(s) omitted>".
-        void incr_dropped_frames([[maybe_unused]] size_t count = 1)
+        void incr_dropped_frames()
         {
-            truncated = true;
+            // no-op
         }
 
         /* Stats sink for the vendored stack sampler; see ProfilerStats. */
