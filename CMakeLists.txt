@@ -71,7 +71,6 @@ set(SOURCE_FILES
         ${COLLECTOR_DIR}/_memalloc_tb.cpp
         ${COLLECTOR_DIR}/_memalloc_heap.cpp
         ${COLLECTOR_DIR}/_memalloc_reentrant.cpp
-        pyroscope/Pyroscope.h
         ${PROFILING_DIR}/stack/src/echion/danger.cc
         ${PROFILING_DIR}/stack/src/echion/frame.cc
         ${PROFILING_DIR}/stack/src/echion/greenlets.cc
@@ -122,6 +121,7 @@ target_include_directories(
         ${PYROSCOPE_FFI_INCLUDE_DIR}
         ${PROFILING_DIR}/stack/echion
         ${PROFILING_DIR}/stack/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/pyroscope
 )
 
 # Link libraries Python3::Python target might not exist in all build environments (e.g., manylinux) Python modules
