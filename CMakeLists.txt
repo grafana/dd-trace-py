@@ -71,7 +71,23 @@ set(SOURCE_FILES
         ${COLLECTOR_DIR}/_memalloc_tb.cpp
         ${COLLECTOR_DIR}/_memalloc_heap.cpp
         ${COLLECTOR_DIR}/_memalloc_reentrant.cpp
-        pyroscope/Pyroscope.h)
+        pyroscope/Pyroscope.h
+        ${PROFILING_DIR}/stack/src/echion/danger.cc
+        ${PROFILING_DIR}/stack/src/echion/frame.cc
+        ${PROFILING_DIR}/stack/src/echion/greenlets.cc
+        ${PROFILING_DIR}/stack/src/echion/interp.cc
+        ${PROFILING_DIR}/stack/src/echion/long.cc
+        ${PROFILING_DIR}/stack/src/echion/mirrors.cc
+        ${PROFILING_DIR}/stack/src/echion/stack_chunk.cc
+        ${PROFILING_DIR}/stack/src/echion/stacks.cc
+        ${PROFILING_DIR}/stack/src/echion/strings.cc
+        ${PROFILING_DIR}/stack/src/echion/tasks.cc
+        ${PROFILING_DIR}/stack/src/echion/threads.cc
+        ${PROFILING_DIR}/stack/src/echion/vm.cc
+        ${PROFILING_DIR}/stack/src/sampler.cpp
+        ${PROFILING_DIR}/stack/src/stack.cpp
+        ${PROFILING_DIR}/stack/src/stack_renderer.cpp
+        ${PROFILING_DIR}/stack/src/thread_span_links.cpp)
 
 set(PYROSCOPE_FFI_INCLUDE_DIR "" CACHE PATH "Directory containing pyroscope_ffi.h")
 if (NOT PYROSCOPE_FFI_INCLUDE_DIR)
@@ -81,6 +97,11 @@ endif ()
 set(FULL_EXTENSION_NAME "datadog_mem_profiler")
 
 add_library(${FULL_EXTENSION_NAME} STATIC ${SOURCE_FILES})
+if(APPLE)
+    target_compile_definitions(${FULL_EXTENSION_NAME} PRIVATE PL_DARWIN)
+elseif(UNIX)
+    target_compile_definitions(${FULL_EXTENSION_NAME} PRIVATE PL_LINUX)
+endif()
 
 
 # Set properties to prevent CMake from adding any prefix or suffix
@@ -99,6 +120,8 @@ target_include_directories(
         ${COLLECTOR_DIR}
         ${PROFILING_DIR}
         ${PYROSCOPE_FFI_INCLUDE_DIR}
+        ${PROFILING_DIR}/stack/echion
+        ${PROFILING_DIR}/stack/include
 )
 
 # Link libraries Python3::Python target might not exist in all build environments (e.g., manylinux) Python modules
