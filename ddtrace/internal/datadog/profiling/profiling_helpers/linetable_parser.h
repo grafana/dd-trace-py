@@ -21,46 +21,38 @@ namespace DataDog {
 /* ---- Varint helpers for PEP 657 location table (Python 3.11+) ---------- */
 #if PY_VERSION_HEX >= 0x030b0000
 
-inline uint32_t
+inline int
 read_varint(const unsigned char* table, Py_ssize_t len, Py_ssize_t* i)
 {
     Py_ssize_t guard = len - 1;
     if (*i >= guard)
         return 0;
 
-    // Accumulate in 64 bits in case the data we read is malformed, a 32 bit
-    // accumulator could overflow on the << shift before we check for overflow.
-    uint64_t val = table[++*i] & 63;
-    unsigned int shift = 0;
-    while (*i < guard && (table[*i] & 64)) {
+    uint32_t val = table[++*i] & 63;
+    uint32_t shift = 0;
+    while (*i < guard && table[*i] & 64) {
         shift += 6;
 
         if (shift >= 32) {
-            // Bail out on over-large varints from malformed input; advance i
-            // past remaining continuation bytes to leave it in a consistent
-            // state, even though callers don't rely on the value of i or reuse it.
-            for (; *i < guard && (table[*i] & 64); ++*i)
+            // Guard against UB from over-large shift on malformed input;
+            // advance `i` past remaining continuation bytes to leave it in a
+            // consistent state, even though callers don't rely on the value of
+            // i or reuse it
+            for (; *i < guard && table[*i] & 64; ++*i)
                 ;
 
             return 0;
         }
 
-        val |= static_cast<uint64_t>(table[++*i] & 63) << shift;
+        val |= static_cast<uint32_t>(table[++*i] & 63) << shift;
     }
-
-    // shift stays below 32, so val holds at most 36 significant bits.
-    // Keep the low 32 bits for zigzag decoding; parse_linetable clamps the
-    // final resolved line. Clamping to INT_MAX here would turn a valid
-    // unsigned encoding of a large positive delta into an odd value and
-    // decode it as a large negative line.
-    return static_cast<uint32_t>(val);
+    return static_cast<int>(val);
 }
 
 inline int
 read_signed_varint(const unsigned char* table, Py_ssize_t len, Py_ssize_t* i)
 {
-    uint32_t val = read_varint(table, len, i);
-    // val >> 1 is at most INT_MAX, so these conversions are well-defined.
+    uint32_t val = static_cast<uint32_t>(read_varint(table, len, i));
     return (val & 1) ? -static_cast<int>(val >> 1) : static_cast<int>(val >> 1);
 }
 
@@ -92,9 +84,7 @@ parse_linetable(const unsigned char* table, Py_ssize_t len, int lasti, int first
         return firstlineno;
     }
 
-    // Accumulate in a signed 64-bit value in case the data we read is malformed, a 32 bit
-    // accumulator could overflow on the << shift before we check for overflow.
-    int64_t lineno = firstlineno;
+    unsigned int lineno = static_cast<unsigned int>(firstlineno);
 
 #if PY_VERSION_HEX >= 0x030b0000
     /* Python 3.11+: PEP 657 location table in co_linetable.
@@ -181,10 +171,7 @@ parse_linetable(const unsigned char* table, Py_ssize_t len, int lasti, int first
 
 #endif /* PY_VERSION_HEX >= 0x030b0000 */
 
-    if (lineno <= 0)
-        return 0;
-
-    return lineno > INT_MAX ? INT_MAX : static_cast<int>(lineno);
+    return lineno > 0 ? static_cast<int>(lineno) : 0;
 }
 
 } /* namespace DataDog */
