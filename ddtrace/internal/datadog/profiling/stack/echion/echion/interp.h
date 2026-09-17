@@ -24,7 +24,6 @@
 class InterpreterInfo
 {
   public:
-    PyInterpreterState* interp = nullptr;
     int64_t id = 0;
     void* tstate_head = NULL;
     void* next = NULL;
