@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstdint>
-#include <functional>
 #include <optional>
 #include <shared_mutex>
 #include <string>
@@ -41,10 +40,6 @@ struct NativeCallEntry
 class NativeCallRegistry
 {
   public:
-    // Dynamic code generators can produce an unbounded number of one-shot code
-    // objects, so stop registering new sites once the registry reaches its cap.
-    static constexpr size_t max_call_sites = 4096;
-
     NativeCallRegistry() = default;
     ~NativeCallRegistry() = default;
 
@@ -69,6 +64,14 @@ class NativeCallRegistry
                                                                   int offset_bytes,
                                                                   int first_lineno);
 
+    // Number of registered call sites.
+    //
+    // Pyroscope patch: reconstructed, not copied. cpp/stack was vendored from a
+    // dd-trace-py revision newer than the dd_wrapper sources beside it, and
+    // stack.cpp's _native_call_registry_size test helper calls this. Replace it
+    // with upstream's own on the next vendor sync if the signature differs.
+    size_t size();
+
     // Clears the registry.
     // Note: this frees the NativeCallEntry's, meaning any reference to a NativeCallEntry from
     // the map is invalid after calling reset.
@@ -78,10 +81,8 @@ class NativeCallRegistry
 
     void postfork_child();
 
-    size_t size() const;
-
   private:
-    mutable std::shared_mutex mtx;
+    std::shared_mutex mtx;
     std::unordered_map<CallSiteKey, NativeCallEntry, CallSiteKeyHash> call_sites;
 };
 

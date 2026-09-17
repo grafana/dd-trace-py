@@ -1,90 +1,52 @@
 #pragma once
 
-#include "constants.hpp"
-#include "libdatadog_helpers.hpp"
-#include "native_call_tracker.hpp"
-#include "profile.hpp"
-#include "types.hpp"
+/* Pyroscope patch: a drastically trimmed stand-in for dd_wrapper's
+ * Datadog::ProfilerState.
+ *
+ * Upstream this is the profiler's one global-state object, and almost all of
+ * it is libdatadog: the Profiles Dictionary handle plus its init/release
+ * lifecycle, the ddog_prof_StringId2 tag/label key caches and the interned
+ * empty-string id, the Profile (ddog_prof_Profile + ProfilerStats) it owns,
+ * the whole uploader configuration block (env/service/version/url/tags/...),
+ * and the upload_lock / ddog_CancellationToken upload_cancel pair. Pyroscope
+ * has no libdatadog and no dd_wrapper uploader, so none of that is carried
+ * over; the profile-building state it stands in for lives on the Rust side
+ * (rust/src/encode/).
+ *
+ * What remains is exactly what the vendored stack sampler reaches for, and
+ * both of those members are plain C++ upstream too:
+ *
+ *   * native_call_registry -- the sys.monitoring CALL-event side table that
+ *     lets the sampler splice native frames in front of their Python caller.
+ *     Copied verbatim; see native_call_tracker.hpp.
+ *   * upload_seq -- a counter the sampler watches to notice upload boundaries.
+ *
+ * Also dropped: start(), cleanup(), prefork(), postfork_parent(),
+ * is_initialized(). Upstream's start() is what creates the Profiles
+ * Dictionary and installs dd_wrapper's pthread_atfork handlers; there is
+ * nothing here to initialize, and Sampler installs its own handlers.
+ *
+ * TODO(Pyroscope): nothing increments upload_seq. Upstream bumps it once per
+ * upload in the uploader, and Sampler::sampling_thread uses the delta to clear
+ * echion's ephemeral string table entries (task and greenlet names) every 25
+ * uploads -- see the ephemeral_clear_interval block in cpp/stack/src/sampler.cpp.
+ * Held at 0, that clear never runs and the ephemeral table grows without bound
+ * for a process that churns asyncio task names. Bump it from the Rust dump
+ * path (memory::implementation::dump_pprof, or the CPU equivalent) when the CPU
+ * profile is actually wired up to the encoder. */
 
-#include <array>
+#include "native_call_tracker.hpp"
+
 #include <atomic>
-#include <mutex>
-#include <string>
-#include <unordered_map>
+#include <cstdint>
 
 namespace Datadog {
 
-class Sample;
-
-// ProfilerState is a singleton class that holds all Profiler "global" state.
-// Consolidating it here makes lifecycle management (init, cleanup, fork handling) clearer.
-// Note: this class does not start or stop threads. However, it installs fork handlers that
-//   may stop threads through libdatadog helpers (abstracted away / out of our control).
-//
-// This class owns all shared mutable state for the profiler.
-// When adding new state, consider whether it belongs here or in a specific component.
 class ProfilerState
 {
   public:
-    using ExporterTagset = std::unordered_map<std::string, std::string>;
-
     // Singleton access
     static ProfilerState& get();
-
-    // Lifecycle
-    void start();
-    void cleanup();
-    void prefork();
-    void postfork_parent();
-    void postfork_child();
-
-    // Query state
-    bool is_initialized() const { return initialized_.load(std::memory_order_acquire); }
-
-    // ========================================================================
-    // Profiles Dictionary state
-    // ========================================================================
-    std::optional<ddog_prof_ProfilesDictionaryHandle> get_profiles_dictionary();
-    void release_profiles_dictionary();
-
-    // ========================================================================
-    // Uploader configuration
-    // ========================================================================
-    std::string dd_env;
-    std::string service;
-    std::string version;
-    std::string runtime{ g_runtime_name };
-    std::string runtime_id;
-    std::string process_id;
-    std::string runtime_version;
-    std::string profiler_version;
-    std::string url{ "http://localhost:8126" };
-    ExporterTagset user_tags{};
-    std::string output_filename;
-    uint64_t max_timeout_ms{ g_default_max_timeout_ms };
-    std::string process_tags;
-
-    // ========================================================================
-    // Sample configuration
-    // ========================================================================
-    unsigned int max_nframes{ g_default_max_nframes };
-    SampleType type_mask{ SampleType::All };
-    size_t sample_pool_capacity{ g_default_sample_pool_capacity };
-
-    // ========================================================================
-    // Profile state
-    // ========================================================================
-    Profile profile_state{};
-    bool timeline_enabled{ false };
-
-    // Snapshot of the profiler's user-facing configuration, stored as a
-    // compact JSON object (e.g. `{"dd.profiling.enabled": true, ...}`).
-    // Uploaded via the `info` channel of the libdatadog exporter, which the
-    // backend auto-indexes for filtering profiles by configuration. Lives on
-    // ProfilerState (not on the per-profile ProfilerStats) because it is
-    // process-global static configuration; ProfilerStats is std::swap-ped on
-    // every upload in UploaderBuilder::build, which would drop the value.
-    std::string profiler_settings_info_json;
 
     // ========================================================================
     // Native call tracking state
@@ -94,25 +56,24 @@ class ProfilerState
     // ========================================================================
     // Upload state
     // ========================================================================
-    std::mutex upload_lock{};
-    // ddog_CancellationToken is documented as an opaque type, but we access .inner directly to
-    // zero-initialize it: the C API provides no constructor, and the default value of .inner
-    // is undefined. We check .inner != nullptr as a sentinel for "a token is in flight".
-    std::atomic<ddog_CancellationToken> upload_cancel{ { .inner = nullptr } };
     std::atomic<uint64_t> upload_seq{ 0 };
 
-    // ========================================================================
-    // Interned string caches
-    // ========================================================================
-    static constexpr size_t kNumLabelKeys = static_cast<size_t>(ExportLabelKey::Length_);
-    std::array<std::atomic<ddog_prof_StringId2>, kNumLabelKeys> label_cache{};
-    // Written only during single-threaded init/postfork; read freely after initialized_ is set
-    ddog_prof_StringId2 cached_empty_string_id{ nullptr };
-
-    // Internal helpers
-    bool init_profiles_dictionary();
-    bool init_interned_strings();
-    void reset_key_caches();
+    /* TODO(Pyroscope): no caller yet, so the native call registry's mutex is
+     * never re-initialized in a forked child.
+     *
+     * Upstream never calls this from the stack tree either -- it runs from the
+     * pthread_atfork child handler that ProfilerState::start installs. That
+     * handler is registered before Sampler::start, so POSIX's FIFO child-handler
+     * ordering guarantees it runs before the sampler's own; the note in
+     * Sampler::atfork_child in cpp/stack/src/sampler.cpp still describes that
+     * arrangement. We have no ProfilerState::start, so the ordering does not
+     * hold and nothing re-inits the mutex.
+     *
+     * Wiring this up needs the same care as the TODO(Pyroscope) on
+     * ffikit::stop_profilers in rust/src/ffikit.rs, which flags the mirror
+     * problem: stack_atfork_child calls restart_after_fork() before Python's
+     * at_fork_after_in_child hooks run. */
+    void postfork_child();
 
   private:
     ProfilerState() = default;
@@ -123,13 +84,6 @@ class ProfilerState
     ProfilerState& operator=(const ProfilerState&) = delete;
     ProfilerState(ProfilerState&&) = delete;
     ProfilerState& operator=(ProfilerState&&) = delete;
-
-    // Initialization state
-    std::atomic<bool> initialized_{ false };
-    std::once_flag init_flag_;
-
-    // Profiles Dictionary handle
-    std::atomic<ddog_prof_ProfilesDictionaryHandle> dict_handle_{ nullptr };
 };
 
 } // namespace Datadog
