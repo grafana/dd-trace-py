@@ -100,7 +100,6 @@ set(STACK_SOURCES
         # separate shared libdd_wrapper that stack_v2 links against; we archive
         # them straight into the stack object library, since the CPU sampler is
         # their only consumer (see dd_wrapper/include/profiler_state.hpp).
-        ${PROFILING_DIR}/dd_wrapper/src/native_call_tracker.cpp
         ${PROFILING_DIR}/dd_wrapper/src/profiler_state.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/pyroscope/stack_ffi.cpp
         ${PROFILING_DIR}/stack/src/echion/danger.cc
