@@ -1,3 +1,0 @@
-features:
-  - |
-    Profiling: It is now possible to set a maximum number of asyncio tasks/greenlets to sample per cycle.

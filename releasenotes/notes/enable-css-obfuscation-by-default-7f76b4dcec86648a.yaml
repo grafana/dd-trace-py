@@ -1,4 +1,0 @@
----
-features:
-  - |
-    Stats computation: Enables obfuscation by default. Stats computation itself remains enabled by default only on Python 3.14 and above.

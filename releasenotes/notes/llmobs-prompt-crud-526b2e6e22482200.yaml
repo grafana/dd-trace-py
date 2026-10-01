@@ -1,5 +1,0 @@
----
-features:
-  - |
-    LLM Observability: Adds prompt management methods to ``LLMObs`` for creating, updating, deleting, and listing
-    prompts and prompt versions in the prompt registry. #18186

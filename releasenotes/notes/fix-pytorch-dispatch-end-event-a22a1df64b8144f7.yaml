@@ -1,4 +1,0 @@
----
-fixes:
-  - |
-    pytorch: Fix an issue where the ``pytorch.rank`` span could end too soon.

@@ -1,5 +1,0 @@
----
-features:
-  - |
-    profiling: ``DD_PROFILING_MEMORY_MEM_DOMAIN_ENABLED`` now defaults to
-    ``true``, so the heap profiler also tracks allocations in the Mem domain on Python 3.12+.

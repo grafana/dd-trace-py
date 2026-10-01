@@ -1,4 +1,0 @@
----
-features:
-  - |
-    opentelemetry: OTLP trace export now supports the ``http/protobuf`` protocol (the default) and ``http/json``, selected via the ``OTEL_EXPORTER_OTLP_TRACES_PROTOCOL`` environment variable.

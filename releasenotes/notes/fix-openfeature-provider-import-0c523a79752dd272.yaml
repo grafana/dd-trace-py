@@ -1,5 +1,0 @@
----
-fixes:
-  - |
-    openfeature: This fix resolves an issue where the feature flagging provider failed to load with
-    ``openfeature-sdk`` 0.10.0 or later.

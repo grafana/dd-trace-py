@@ -1,5 +1,0 @@
----
-fixes:
-  - |
-    tracing: This fix resolves a rare issue that could cause an application to
-    hang after forking a child process.

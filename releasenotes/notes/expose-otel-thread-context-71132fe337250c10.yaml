@@ -1,4 +1,0 @@
----
-features:
-  - |
-    tracing: Adds OpenTelemetry thread-context publication on Linux, enabling compatible profiling tools to correlate samples with the active trace and span.

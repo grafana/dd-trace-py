@@ -1,4 +1,0 @@
-fixes:
-  - |
-    snowflake: Fixes an issue where traced cursor calls fail when ``command`` is passed as a
-    keyword argument to ``execute`` or ``executemany``.

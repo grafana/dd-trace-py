@@ -1,4 +1,0 @@
----
-features:
-  - |
-    LLM Observability: This introduces capture of session metadata (session id, user id, and app name) from the Google ADK ``Session`` object on LLM Observability spans.
