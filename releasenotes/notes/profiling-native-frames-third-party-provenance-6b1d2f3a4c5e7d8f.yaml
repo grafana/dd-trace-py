@@ -1,5 +1,0 @@
-features:
-  - |
-    profiling: Native frames collected by the profiler are now attributed to
-    third-party code in the code provenance view, rather than appearing as
-    application code.

@@ -1,4 +1,0 @@
-fixes:
-  - |
-    ASM: Fixes false-positive and duplicate unvalidated redirect reports in Flask
-    applications when a request parameter matches the response Location header.

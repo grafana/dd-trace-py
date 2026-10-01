@@ -1,5 +1,0 @@
----
-features:
-  - |
-    CI Visibility: Adds a new ``ci.pipeline.display_name`` tag for the Buildkite provider,
-    populated from the ``BUILDKITE_PIPELINE_NAME`` environment variable.

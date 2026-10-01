@@ -1,3 +1,0 @@
-fixes:
-  - |
-    Fix crashes in uwsgi worker when exiting from SIGTERM.

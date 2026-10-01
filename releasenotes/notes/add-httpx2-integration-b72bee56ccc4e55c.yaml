@@ -1,4 +1,0 @@
-features:
-  - |
-    httpx2: Adds automatic tracing for synchronous and asynchronous HTTP requests made with
-    ``httpx2>=2.0.0``

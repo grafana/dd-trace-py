@@ -1,5 +1,0 @@
-#!/usr/bin/env bash
-set -euo pipefail
-
-scripts/test-requirements lock "$@"
-scripts/integration_registry/generate_supported_versions.py

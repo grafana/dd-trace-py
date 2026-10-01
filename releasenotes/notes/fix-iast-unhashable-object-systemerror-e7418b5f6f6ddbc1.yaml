@@ -1,7 +1,0 @@
----
-fixes:
-  - |
-    Code Security (IAST): Fixes a ``SystemError`` raised inside an instrumented request when an
-    operation handled a container holding an object that cannot be hashed, such as the cookie
-    objects Django builds in ``HttpResponse.set_cookie``, and fixes the same error when a regular
-    expression matched against a ``bytearray``.

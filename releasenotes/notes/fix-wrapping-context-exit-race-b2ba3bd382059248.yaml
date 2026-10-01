@@ -1,5 +1,0 @@
----
-fixes:
-  - |
-    code origin for spans: prevent view or traced functions from raising an
-    exception in situations where their number is large.

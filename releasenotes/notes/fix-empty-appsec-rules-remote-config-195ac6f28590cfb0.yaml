@@ -1,5 +1,0 @@
----
-fixes:
-  - |
-    AAP: Fixes an issue where setting ``DD_APPSEC_RULES`` to an empty value prevents
-    AppSec rules from being updated through remote configuration.

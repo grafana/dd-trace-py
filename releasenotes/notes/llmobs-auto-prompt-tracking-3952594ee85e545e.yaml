@@ -1,5 +1,0 @@
----
-features:
-  - |
-    LLM Observability: auto-instrumented LLM integrations now automatically link Datadog Managed Prompts
-    retrieved with ``LLMObs.get_prompt()`` and rendered with ``.format()`` to the resulting LLM span.
