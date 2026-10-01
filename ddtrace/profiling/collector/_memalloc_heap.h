@@ -22,5 +22,12 @@ memalloc_heap_track_invokes_cpython(uint16_t max_nframe, void* ptr, size_t size,
 void
 memalloc_heap_untrack_no_cpython(void* ptr);
 
+// Pyroscope patch: Rust calls the post-fork hook through its C ABI.
+#ifdef __cplusplus
+extern "C" {
+#endif
 void
 memalloc_heap_postfork_child(void);
+#ifdef __cplusplus
+}
+#endif

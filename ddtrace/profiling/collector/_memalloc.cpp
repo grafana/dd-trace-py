@@ -13,8 +13,9 @@
 #include "_memalloc_tb.h"
 #include "_pymacro.h"
 
-// Ensure profile_state is initialized before creating Sample objects
-#include "ddup_interface.hpp"
+// Pyroscope patch: Pyroscope uses its Rust profile builder and does not provide
+// Datadog's ddup interface.
+// #include "ddup_interface.hpp"
 
 typedef struct
 {
@@ -40,7 +41,9 @@ static bool memalloc_enabled = false;
  * caller's mem_domain_enabled=true and the next stop()). */
 static bool memalloc_mem_installed = false;
 #endif // _PY312_AND_LATER
-static std::once_flag memalloc_fork_handler_once_flag;
+// Pyroscope patch: Rust registers the handler with os.register_at_fork, so this
+// Datadog-only registration guard is intentionally disabled.
+// static std::once_flag memalloc_fork_handler_once_flag;
 
 /* Two-slot buffer for atomically publishing the saved (original) allocator.
  *
@@ -258,34 +261,21 @@ memalloc_realloc_mem(void* ctx, void* ptr, size_t new_size)
 }
 #endif // _PY312_AND_LATER
 
-PyDoc_STRVAR(memalloc_start__doc__,
-             "start($module, max_nframe, heap_sample_interval, mem_domain_enabled)\n"
-             "--\n"
-             "\n"
-             "Start tracing Python memory allocations.\n"
-             "\n"
-             "Sets the maximum number of frames stored in the traceback of a\n"
-             "trace to max_nframe.\n"
-             "Sets the average number of bytes allocated between samples to\n"
-             "heap_sample_interval.\n"
-             "If heap_sample_interval is set to 0, it is disabled entirely.\n"
-             "Enables profiling of PyMem_Malloc/Calloc/Realloc events (allocations in the Mem domain).\n"
-             "Requires Python 3.12 or later.\n");
-static PyObject*
-memalloc_start(PyObject* Py_UNUSED(module), PyObject* args)
+// Pyroscope patch: expose a typed C ABI entrypoint for the Rust integration
+// instead of defining a Python extension-module callback. Return 0 on success
+// and -1 with a Python exception on failure so Rust can distinguish the paths.
+extern "C" int memalloc_start(uint16_t max_nframe,
+    uint64_t heap_sample_size,
+    bool enable_mem_domain)
 {
     if (memalloc_enabled) {
         PyErr_SetString(PyExc_RuntimeError, "the memalloc module is already started");
-        return nullptr;
+        return -1;
     }
 
-    // Ensure profile_state is initialized before creating Sample objects
-    // This initializes the Sample::profile_state which is required for Sample objects to work correctly
-    // ddup_start() uses std::call_once, so it's safe to call multiple times
-    // ddup_start also registers fork handlers for various components, so if
-    // any of memalloc's states refer to states that are reset after fork,
-    // memalloc also has to clear its state after fork via below fork handler.
-    ddup_start();
+    // Pyroscope patch: the Rust profile builder owns profiler initialization,
+    // so Datadog's ddup state must not be started here.
+    // ddup_start();
 
     // Register fork handler
     // Mainly to clear the heap tracker state before running any Python code,
@@ -294,8 +284,10 @@ memalloc_start(PyObject* Py_UNUSED(module), PyObject* args)
     // We use std::call_once as registered fork handlers persist after fork, and
     // we want to ensure that the fork handlers are registered only once per
     // process, even when the memory profiler is restarted after fork.
-    std::call_once(memalloc_fork_handler_once_flag,
-                   []() { pthread_atfork(nullptr, nullptr, memalloc_heap_postfork_child); });
+    // Pyroscope patch: Rust registers this handler with os.register_at_fork so
+    // it follows Python's fork lifecycle and is not invoked twice.
+    // std::call_once(memalloc_fork_handler_once_flag,
+    //                []() { pthread_atfork(nullptr, nullptr, memalloc_heap_postfork_child); });
 
     char* val = getenv("_DD_MEMALLOC_DEBUG_RNG_SEED");
     if (val) {
@@ -304,31 +296,24 @@ memalloc_start(PyObject* Py_UNUSED(module), PyObject* args)
         srand(atoi(val));
     }
 
-    long max_nframe;
-    long long int heap_sample_size;
-    int enable_mem_domain;
 
-    /* Store short ints in ints so we're sure they fit */
-    if (!PyArg_ParseTuple(args, "lLp", &max_nframe, &heap_sample_size, &enable_mem_domain)) {
-        // Don't set an error string, ParseTuple will set it to a TypeError already.
-        return nullptr;
-    }
+
 
     if (max_nframe < 1 || max_nframe > TRACEBACK_MAX_NFRAME) {
         PyErr_Format(PyExc_ValueError, "the number of frames must be in range [1; %u]", TRACEBACK_MAX_NFRAME);
-        return nullptr;
+        return -1;
     }
 
     global_memalloc_ctx.max_nframe = (uint16_t)max_nframe;
 
     if (heap_sample_size < 0 || heap_sample_size > MAX_HEAP_SAMPLE_SIZE) {
         PyErr_Format(PyExc_ValueError, "the heap sample size must be in range [0; %u]", MAX_HEAP_SAMPLE_SIZE);
-        return nullptr;
+        return -1;
     }
 
     if (!memalloc_heap_tracker_init_no_cpython((uint32_t)heap_sample_size)) {
         PyErr_SetString(PyExc_RuntimeError, "failed to initialize heap tracker");
-        return nullptr;
+        return -1;
     }
 
     PyMemAllocatorEx alloc;
@@ -378,22 +363,16 @@ memalloc_start(PyObject* Py_UNUSED(module), PyObject* args)
 
     memalloc_enabled = true;
 
-    Py_RETURN_NONE;
+    return 0;
 }
 
-PyDoc_STRVAR(memalloc_stop__doc__,
-             "stop($module, /)\n"
-             "--\n"
-             "\n"
-             "Stop tracing Python memory allocations.\n"
-             "\n"
-             "Also clear traces of memory blocks allocated by Python.");
-static PyObject*
-memalloc_stop(PyObject* Py_UNUSED(module), PyObject* Py_UNUSED(args))
+
+// Pyroscope patch: expose an idempotent C ABI stop entrypoint for Rust instead
+// of a Python extension-module callback that raises when already stopped.
+extern "C" void memalloc_stop()
 {
     if (!memalloc_enabled) {
-        PyErr_SetString(PyExc_RuntimeError, "the memalloc module was not started");
-        return NULL;
+        return;
     }
 
     /* First, uninstall our wrappers. There may still be calls to our wrapper in progress,
@@ -415,8 +394,13 @@ memalloc_stop(PyObject* Py_UNUSED(module), PyObject* Py_UNUSED(args))
             PyMemAllocatorEx restore_mem = *saved_mem;
             PyMem_SetAllocator(PYMEM_DOMAIN_MEM, &restore_mem);
         }
-        /* Null out so the MEM free hook fast-exits after stop. */
-        g_saved_alloc_mem_pub.store(nullptr, std::memory_order_release);
+        /* Pyroscope patch: deliberately leave g_saved_alloc_mem_pub pointing at the valid saved
+         * allocator (mirroring the OBJ path above, which never nulls
+         * g_saved_alloc_pub). Once PyMem_SetAllocator has restored the real MEM
+         * allocator, CPython no longer dispatches frees to our hook, so a stale
+         * pointer is harmless. Nulling it here would make an in-flight
+         * memalloc_free_mem load NULL and fast-exit without delegating to the
+         * underlying free, leaking that allocation. */
         memalloc_mem_installed = false;
     }
 #endif // _PY312_AND_LATER
@@ -425,46 +409,16 @@ memalloc_stop(PyObject* Py_UNUSED(module), PyObject* Py_UNUSED(args))
 
     memalloc_enabled = false;
 
-    Py_RETURN_NONE;
 }
 
-PyDoc_STRVAR(memalloc_heap_py__doc__,
-             "heap($module, /)\n"
-             "--\n"
-             "\n"
-             "Export sampled heap allocations to the pprof profile.\n");
-static PyObject*
-memalloc_heap_py(PyObject* Py_UNUSED(module), PyObject* Py_UNUSED(args))
+
+// Pyroscope patch: expose an idempotent C ABI heap-export entrypoint for Rust
+// instead of a Python extension-module callback that raises when not started.
+extern "C" void memalloc_heap_py()
 {
     if (!memalloc_enabled) {
-        PyErr_SetString(PyExc_RuntimeError, "the memalloc module was not started");
-        return NULL;
+        return;
     }
 
     memalloc_heap_no_cpython();
-    Py_RETURN_NONE;
-}
-
-static PyMethodDef module_methods[] = { { "start", (PyCFunction)memalloc_start, METH_VARARGS, memalloc_start__doc__ },
-                                        { "stop", (PyCFunction)memalloc_stop, METH_NOARGS, memalloc_stop__doc__ },
-                                        { "heap", (PyCFunction)memalloc_heap_py, METH_NOARGS, memalloc_heap_py__doc__ },
-                                        /* sentinel */
-                                        { NULL, NULL, 0, NULL } };
-
-PyDoc_STRVAR(module_doc, "Module to trace memory blocks allocated by Python.");
-
-static struct PyModuleDef module_def = {
-    PyModuleDef_HEAD_INIT, "_memalloc", module_doc, 0, /* non-negative size to be able to unload the module */
-    module_methods,        NULL,        NULL,       NULL, NULL,
-};
-
-PyMODINIT_FUNC
-PyInit__memalloc(void)
-{
-    PyObject* m;
-    m = PyModule_Create(&module_def);
-    if (m == NULL)
-        return NULL;
-
-    return m;
 }
