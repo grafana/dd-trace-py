@@ -5,14 +5,16 @@
 #include <cstddef>
 #include <cstdint>
 
-// Include Sample class header to enable calling functions from Sample.cpp
-#include "sample.hpp"
+// Pyroscope patch: use the Rust-backed Pyroscope sample adapter instead of
+// Datadog's sample.hpp implementation.
+#include "Pyroscope.h"
 
 class traceback_t
 {
   public:
-    /* Sample object storing the stacktrace */
-    Datadog::Sample sample;
+    /* Pyroscope patch: store samples in the Pyroscope adapter so exports are
+     * forwarded to the Rust profile builder. */
+    Pyroscope::Sample sample;
 
     /* Monotonic timestamp of when this allocation was sampled.
      * Used at export time to compute object age for lifecycle analysis. */
