@@ -9,7 +9,7 @@ Consumed as a git submodule by grafana/pyroscope-python. Branch `main` is upstre
 - `tests/profiling/`, `tests/commands/ddtrace_run_profiling.py`, `scripts/profiles/`, `ddtrace/internal/settings/profiling.py*`
 - `ddtrace/internal/wrapping/`, `module.py`, `forksafe.py`, `_unpatched.py`, `logger.py`, `_threads.*`
 - `LICENSE*`, `NOTICE`
-- Pyroscope build files at the repo root: `CMakeLists.txt`, `BundleStaticLibrary.cmake`, `pyroscope/Pyroscope.h`
+- Pyroscope build files at the repo root: `CMakeLists.txt`, `BundleStaticLibrary.cmake`, `pyroscope/Pyroscope.h`, `pyroscope/stack_ffi.cpp`
 
 Kept tests and fuzzers are never built or run from this repo.
 
@@ -20,7 +20,9 @@ No CI or workflows of any kind belong in this repo.
 
 ## Patches
 
-Files carrying `// Pyroscope patch:` markers: `_memalloc.cpp`, `_memalloc_heap.{cpp,h}`, `_memalloc_tb.{cpp,h}`.
+Files carrying `// Pyroscope patch:` markers: `_memalloc.cpp`, `_memalloc_heap.{cpp,h}`, `_memalloc_tb.{cpp,h}`, and the stack sampler under `ddtrace/internal/datadog/profiling/stack/`.
+`dd_wrapper/include/{sample,sample_manager,profiler_state,profiler_stats,native_call_tracker}.hpp` and `dd_wrapper/src/profiler_state.cpp` are Pyroscope shims replacing upstream's libdatadog-backed versions.
+`stack/CMakeLists.txt`, `stack/src/stack.cpp` and `stack/include/util/cast_to_pyfunc.hpp` are deleted; `pyroscope/stack_ffi.cpp` replaces the `_stack` module.
 Keep patches in a single commit on top of the base.
 
 ## Pruned files
