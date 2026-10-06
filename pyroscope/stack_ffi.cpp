@@ -188,10 +188,18 @@ pyroscope_stack_weak_link_tasks(PyObject* parent, PyObject* child)
     Datadog::Sampler::get().weak_link_tasks(parent, child);
 }
 
-extern "C" void
+// Pyroscope patch: reports whether echion's thread map took the flag.
+extern "C" bool
 pyroscope_stack_set_uvloop_mode(uint64_t thread_id, bool value)
 {
-    Datadog::Sampler::get().set_uvloop_mode(static_cast<uintptr_t>(thread_id), value);
+    auto& sampler = Datadog::Sampler::get();
+    sampler.set_uvloop_mode(static_cast<uintptr_t>(thread_id), value);
+
+    auto& echion = sampler.get_echion();
+    const std::lock_guard<std::mutex> guard{ echion.thread_info_map_lock() };
+    auto& map = echion.thread_info_map();
+    auto it = map.find(static_cast<uintptr_t>(thread_id));
+    return it != map.end() && it->second->using_uvloop == value;
 }
 
 extern "C" size_t
