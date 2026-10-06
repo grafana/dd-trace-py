@@ -16,7 +16,6 @@
 #include <vector>
 
 #include "constants.hpp"
-#include "pyroscope_ffi.h"
 
 #include "echion/task_name.h"
 #include "echion/timing.h"
@@ -31,6 +30,14 @@ struct SamplingThreadError
 {
     std::string type_name;
     std::string message;
+};
+
+// Pyroscope patch: explicit values, mirrored by PauseResult in pyroscope-python's rust/src/stack.rs.
+enum class PauseResult : std::uint8_t
+{
+    Paused = 0,     // sampler was running and is now paused
+    NotRunning = 1, // sampler was not running (nothing to pause)
+    Timeout = 2,    // sampler is running but did not pause within the timeout
 };
 
 class Sampler
@@ -144,9 +151,7 @@ class Sampler
 
     bool start();
     void stop();
-    // Pyroscope patch: upstream declares its own `PauseResult` here; we return the cbindgen-generated enum so this
-    // declaration and its Rust caller cannot drift.
-    SamplerPauseResult pause();
+    PauseResult pause();
     void resume();
     void register_thread(uint64_t id, uint64_t native_id, const char* name);
     void unregister_thread(uint64_t id);

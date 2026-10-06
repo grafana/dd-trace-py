@@ -111,10 +111,10 @@ pyroscope_stack_take_sampling_thread_error() noexcept
     return Datadog::Sampler::get().take_sampling_thread_error().has_value();
 }
 
-extern "C" SamplerPauseResult
+extern "C" uint8_t
 pyroscope_stack_pause_sampling()
 {
-    return Datadog::Sampler::get().pause();
+    return static_cast<uint8_t>(Datadog::Sampler::get().pause());
 }
 
 extern "C" void
