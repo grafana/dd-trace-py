@@ -152,10 +152,9 @@ traceback_t::init_sample(size_t size, size_t weighted_size, uint16_t max_nframe,
 }
 
 // Constructor calls init_sample() which reads CPython structs directly
-// Pyroscope patch: its sample adapter only needs the frame limit; Datadog
-// sample-type flags do not apply to the Rust profile builder.
+// Pyroscope patch: Datadog sample-type flags become the Rust profile builder's PprofBuilderType.
 traceback_t::traceback_t(size_t size, size_t weighted_size, uint16_t max_nframe, PyMemAllocatorDomain domain)
-  : sample(max_nframe)
+  : sample(max_nframe, PprofBuilderType_Memory)
 {
     if (max_nframe == 0) {
         return;
