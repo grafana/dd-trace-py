@@ -13,35 +13,72 @@ extern "C" {
 
 namespace Pyroscope
 {
+    /* Upstream's ddog_prof_StringId2; ours indexes the table in rust/src/encode/interner.rs. */
+    using string_id = FFIInternedString;
+
+    inline string_id intern_utf8_string(const std::string_view s)
+    {
+        return pyroscope_string_table_intern_utf8(FFIStringView{
+            .data = s.data(),
+            .len = s.length()
+        });
+    }
+
+    inline string_id intern_ascii_string(const std::string_view s)
+    {
+        return pyroscope_string_table_intern_ascii(FFIStringView{
+            .data = s.data(),
+            .len = s.length()
+        });
+    }
+
     class Sample
     {
         std::vector<FFIFrame> frames;
         size_t max_nframes;
-        FFIHeapSampleValues values{};
+        PprofBuilderType builder_type;
+        FFISampleValues values{};
+        bool truncated = false;
+
+        void push_frame_impl(const string_id function_name, const string_id file_name, const int line)
+        {
+            frames.emplace_back(
+                FFIFrame{
+                    .function_name = function_name,
+                    .file_name = file_name,
+                    .line = line,
+                }
+            );
+        }
 
     public:
-        explicit Sample(const size_t max_nframes) : max_nframes{max_nframes}
+        Sample(const size_t _max_nframes, const PprofBuilderType _builder_type)
+            : max_nframes{_max_nframes}, builder_type{_builder_type}
         {
-            frames.reserve(max_nframes);
+            frames.reserve(max_nframes + 1);
         }
 
 
-        void push_frame(const std::string_view function_name, const std::string_view file_name, int _, const int line)
+        void push_frame(const string_id function_name, const string_id file_name, const int line)
         {
-            if (frames.size() == max_nframes)
+            if (frames.size() >= max_nframes)
             {
                 incr_dropped_frames();
+                return;
             }
-            else
+            push_frame_impl(function_name, file_name, line);
+        }
+
+
+        void push_frame(const std::string_view function_name, const std::string_view file_name,
+                        [[maybe_unused]] int address, const int line)
+        {
+            if (frames.size() >= max_nframes)
             {
-                frames.emplace_back(
-                    FFIFrame{
-                        .function_name = intern_string(function_name),
-                        .file_name = intern_string(file_name),
-                        .line = line,
-                    }
-                );
+                incr_dropped_frames();
+                return;
             }
+            push_frame(intern_ascii_string(function_name), intern_ascii_string(file_name), line);
         }
 
 
@@ -65,20 +102,21 @@ namespace Pyroscope
 
         void clear()
         {
-            values.alloc_space = 0;
-            values.alloc_count = 0;
-            values.heap_space = 0;
-            values.heap_count = 0;
+            values = {};
             frames.clear();
+            truncated = false;
         }
 
-        void export_sample() const
+        void export_sample()
         {
-            pyroscope_memprof_push_sample(FFISample{
-                .frames = frames.data(),
-                .len = frames.size(),
-                .values = values,
-            });
+            if (truncated)
+            {
+                static constexpr std::string_view marker = "<truncated>";
+                const string_id id = intern_ascii_string(marker);
+                push_frame_impl(id, id, 0);
+                truncated = false;
+            }
+            pyroscope_push_sample(builder_type, frames.data(), frames.size(), &values);
         }
 
         void push_threadinfo([[maybe_unused]] int64_t thread_id,
@@ -88,18 +126,11 @@ namespace Pyroscope
             // no-op
         }
 
-        void incr_dropped_frames()
+        // Pyroscope patch: appends one countless "<truncated>" frame where
+        // upstream appends "<N frame(s) omitted>".
+        void incr_dropped_frames([[maybe_unused]] size_t count = 1)
         {
-            // no-op
-        }
-
-    private:
-        static FFIInternedString intern_string(std::string_view s)
-        {
-            return pyroscope_memprof_string_table_intern_string(FFIStringView{
-                .data = s.data(),
-                .len = s.length()
-            });
+            truncated = true;
         }
     };
 }
