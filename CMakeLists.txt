@@ -118,10 +118,8 @@ set(STACK_SOURCES
         ${PROFILING_DIR}/stack/src/origin_task_links.cpp
         ${PROFILING_DIR}/stack/src/sampler.cpp
         ${PROFILING_DIR}/stack/src/span_links.cpp
-        # Pyroscope patch: upstream's stack/src/stack.cpp is deleted, not just
-        # unbuilt. It was the _stack CPython module, replaced by the extern "C"
-        # shims in pyroscope/stack_ffi.cpp, and carried the sys.monitoring
-        # native-call tracker the first iteration does not enable.
+        # Pyroscope patch: upstream's stack/src/stack.cpp (the _stack CPython
+        # module) is kept but not built; pyroscope/stack_ffi.cpp replaces it.
         ${PROFILING_DIR}/stack/src/stack_renderer.cpp
 )
 
