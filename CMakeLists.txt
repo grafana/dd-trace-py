@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.19)
 include(CheckIPOSupported)
+include(CheckSymbolExists)
 include(FetchContent)
 
 project(_memalloc)
@@ -42,6 +43,14 @@ find_package(Python3 COMPONENTS Interpreter Development)
 # Make sure we have necessary Python variables
 if (NOT Python3_INCLUDE_DIRS)
     message(FATAL_ERROR "Python3_INCLUDE_DIRS not found")
+endif ()
+
+set(CMAKE_REQUIRED_INCLUDES ${Python3_INCLUDE_DIRS})
+unset(PYROSCOPE_GIL_DISABLED CACHE)
+check_symbol_exists(Py_GIL_DISABLED "Python.h" PYROSCOPE_GIL_DISABLED)
+unset(CMAKE_REQUIRED_INCLUDES)
+if (PYROSCOPE_GIL_DISABLED)
+    message(FATAL_ERROR "free-threaded CPython is unsupported: ${Python3_EXECUTABLE} defines Py_GIL_DISABLED. Build against a GIL-enabled interpreter.")
 endif ()
 
 message(STATUS "Python3_EXECUTABLE ${Python3_EXECUTABLE}")
