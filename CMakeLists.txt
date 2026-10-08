@@ -11,27 +11,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Add compile options
 add_compile_options(-fPIC -fvisibility=hidden -pthread -Wall -Wextra)
 
-# Pyroscope patch: deliberately NO _POSIX_C_SOURCE / _DARWIN_C_SOURCE, unlike
-# dd-trace-py's memalloc CMakeLists that this file was derived from. Do not
-# restore them on a vendor sync -- they are a matched pair of a mistake and its
-# workaround:
-#
-#   * _POSIX_C_SOURCE=200809L entered dd-trace-py in #11460 as the companion to
-#     -std=c11, so a strict-ISO build could see pthread_mutexattr_settype and
-#     PTHREAD_MUTEX_ERRORCHECK in the then-new mutex-based memalloc guard. That
-#     guard is gone (it is an RAII type now) and CMake emits -std=gnu++20, which
-#     is not strict ISO, so nothing needs the macro. On Linux it is a no-op
-#     anyway: g++ predefines _GNU_SOURCE for every C++ TU.
-#   * On macOS it is actively harmful. Darwin's sys/cdefs.h pins __DARWIN_C_LEVEL
-#     to _POSIX_C_SOURCE unless _DARWIN_C_SOURCE is also set, which hides the BSD
-#     types and macros that Abseil (u_int, MAP_ANONYMOUS) and echion
-#     (getpagesize) rely on. _DARWIN_C_SOURCE existed only to cancel that.
-#
-# Dropping both restores the platform's default header exposure, which is what
-# Abseil, echion, and dd-trace-py's own stack extension all expect. If some SDK
-# ever does need _DARWIN_C_SOURCE, it is harmless on its own -- but never bring
-# back _POSIX_C_SOURCE with it.
-
 # Abseil: HeapMapType is backed by absl::flat_hash_map (Swiss Tables). absl is built as
 # static libraries (no BUILD_SHARED_LIBS), position-independent so it can be merged into
 # the final shared Python extension. Tag matches dd-trace-py's pinned version.
@@ -76,10 +55,6 @@ if (NOT TARGET Python3::Python)
     message(STATUS "Python3::Python target not found, using include dirs only")
 endif ()
 
-# The memory profiler and the vendored echion stack sampler are two separate
-# extensions upstream, with deliberately different flags. They are compiled here
-# as two OBJECT libraries so each gets only what it should, then archived into a
-# single static library for the Rust build to link.
 set(COLLECTOR_DIR ${CMAKE_CURRENT_SOURCE_DIR}/ddtrace/profiling/collector)
 set(PROFILING_DIR ${CMAKE_CURRENT_SOURCE_DIR}/ddtrace/internal/datadog/profiling)
 
@@ -91,10 +66,6 @@ set(MEMALLOC_SOURCES
 )
 
 set(STACK_SOURCES
-        # Pyroscope patch: the dd_wrapper half. Upstream builds these into a
-        # separate shared libdd_wrapper that stack_v2 links against; we archive
-        # them straight into the stack object library, since the CPU sampler is
-        # their only consumer (see dd_wrapper/include/profiler_state.hpp).
         ${PROFILING_DIR}/dd_wrapper/src/profiler_state.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/pyroscope/stack_ffi.cpp
         ${PROFILING_DIR}/stack/src/echion/danger.cc
@@ -113,16 +84,11 @@ set(STACK_SOURCES
         ${PROFILING_DIR}/stack/src/origin_task_links.cpp
         ${PROFILING_DIR}/stack/src/sampler.cpp
         ${PROFILING_DIR}/stack/src/span_links.cpp
-        # Pyroscope patch: upstream's stack/src/stack.cpp (the _stack CPython
-        # module) is kept but not built; pyroscope/stack_ffi.cpp replaces it.
         ${PROFILING_DIR}/stack/src/stack_renderer.cpp
 )
 
 set(FULL_EXTENSION_NAME "datadog_mem_profiler")
 
-# Include directories both halves need. Python's headers are marked SYSTEM so
-# CPython's own internals stop warning at us (3.14's pycore_stackref.h trips
-# -Wunused-parameter); upstream marks them SYSTEM for the same reason.
 add_library(pyroscope_common INTERFACE)
 target_include_directories(pyroscope_common INTERFACE
         ${CMAKE_CURRENT_SOURCE_DIR}/pyroscope
@@ -132,13 +98,9 @@ target_include_directories(pyroscope_common INTERFACE
 )
 target_include_directories(pyroscope_common SYSTEM INTERFACE ${Python3_INCLUDE_DIRS})
 
-# Memory profiler half. Carries no compile definitions: it has no use for
-# echion's PL_* platform macros, and see the note above re: feature macros.
-# absl is linked for its include directories; HeapMapType is the only consumer.
 add_library(pyroscope_memalloc OBJECT ${MEMALLOC_SOURCES})
 target_link_libraries(pyroscope_memalloc PRIVATE pyroscope_common absl::flat_hash_map)
 
-# Vendored echion stack sampler half.
 add_library(pyroscope_stack OBJECT ${STACK_SOURCES})
 target_link_libraries(pyroscope_stack PRIVATE pyroscope_common)
 target_include_directories(pyroscope_stack PRIVATE ${PROFILING_DIR}/stack/include)
@@ -149,22 +111,12 @@ target_include_directories(pyroscope_stack SYSTEM PRIVATE
 target_compile_definitions(pyroscope_stack PRIVATE
         $<IF:$<BOOL:${APPLE}>,PL_DARWIN,PL_LINUX>
 )
-# Upstream's add_ddup_config warning set, which it applies to stack/ddup but NOT
-# to memalloc -- so neither do we, since memalloc's vendored sources have never
-# been vetted against -Wold-style-cast. Omitted on purpose: -ffunction-sections
-# (the cmake crate already adds it) and the -Os/LTO/linker options, which are
-# the cmake crate's business here.
 target_compile_options(pyroscope_stack PRIVATE -Wshadow -Wnon-virtual-dtor -Wold-style-cast)
 
-# Per target, never in add_compile_options: the FetchContent'd abseil inherits
-# those, and it is not warning-free (144 warnings under clang 21).
 target_compile_options(pyroscope_memalloc PRIVATE -Werror)
 target_compile_options(pyroscope_stack PRIVATE -Werror)
-# Upstream's fast_copy_env_disabled is kept verbatim but unused: the opt-out is a configure argument.
 set_source_files_properties(${PROFILING_DIR}/stack/src/echion/vm.cc PROPERTIES COMPILE_OPTIONS -Wno-unused-function)
 
-# LINKER_LANGUAGE is required: a target whose only sources are TARGET_OBJECTS
-# gives CMake nothing to infer the language from.
 add_library(${FULL_EXTENSION_NAME} STATIC
         $<TARGET_OBJECTS:pyroscope_memalloc>
         $<TARGET_OBJECTS:pyroscope_stack>

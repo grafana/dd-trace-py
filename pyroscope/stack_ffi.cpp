@@ -14,22 +14,6 @@
 
 static constexpr double g_min_target_overhead = 1e-4;
 
-/* Pyroscope patch: stands in for stack.py::_init's setter block. Handlers are
- * installed at most once per process: reinstalling over a foreign handler would
- * undo sampling_thread's permanent fallback.
- *
- * target_overhead is a fraction here, matching adapt_sampling_interval's
- * formula and g_target_overhead. Upstream's stack.py passes a 1..100
- * percentage into the same setter.
- *
- * adapt_sampling_interval divides by target_overhead, then casts to int64_t
- * before clamping, so a small divisor makes that conversion undefined. The
- * floor keeps us clear of it by ~9 orders of magnitude; see
- * stack_known_bugs.md for why the cast itself is left alone.
- *
- * p_stable_percentile indexes the sorted window unguarded, so anything outside
- * [0, 100] reads out of bounds. Every other setter here either clamps or
- * accepts its whole range. */
 extern "C" void
 pyroscope_stack_configure(double interval_s,
                           bool fast_copy,
@@ -94,15 +78,12 @@ pyroscope_stack_start()
     return Datadog::Sampler::get().start();
 }
 
-/* Pyroscope patch: ffikit::stop_profilers clears the string table right after
- * this returns, so the renderer's ids have to be dropped here -- after stop()
- * has joined the sampling thread, and before the table goes away. */
 extern "C" void
 pyroscope_stack_stop()
 {
     auto& sampler = Datadog::Sampler::get();
     sampler.stop();
-    sampler.get_echion().renderer().reset_string_cache();
+    sampler.get_echion().renderer().reset_string_cache(); // after the join, before stop_profilers clears the string table
 }
 
 extern "C" bool
@@ -188,7 +169,6 @@ pyroscope_stack_weak_link_tasks(PyObject* parent, PyObject* child)
     Datadog::Sampler::get().weak_link_tasks(parent, child);
 }
 
-// Pyroscope patch: reports whether echion's thread map took the flag.
 extern "C" bool
 pyroscope_stack_set_uvloop_mode(uint64_t thread_id, bool value)
 {
