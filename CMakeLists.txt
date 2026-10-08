@@ -11,14 +11,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Add compile options
 add_compile_options(-fPIC -fvisibility=hidden -pthread -Wall -Wextra)
 
-# Platform-specific compile definitions
-if (APPLE)
-    # Fix for newer macOS SDKs that don't define BSD-style types. These are needed by Abseil on macOS
-    add_compile_definitions(_DARWIN_C_SOURCE)
-endif ()
-
-add_compile_definitions(_POSIX_C_SOURCE=200809L)
-
 # Abseil: HeapMapType is backed by absl::flat_hash_map (Swiss Tables). absl is built as
 # static libraries (no BUILD_SHARED_LIBS), position-independent so it can be merged into
 # the final shared Python extension. Tag matches dd-trace-py's pinned version.
@@ -66,21 +58,70 @@ endif ()
 set(COLLECTOR_DIR ${CMAKE_CURRENT_SOURCE_DIR}/ddtrace/profiling/collector)
 set(PROFILING_DIR ${CMAKE_CURRENT_SOURCE_DIR}/ddtrace/internal/datadog/profiling)
 
-set(SOURCE_FILES
+set(MEMALLOC_SOURCES
         ${COLLECTOR_DIR}/_memalloc.cpp
         ${COLLECTOR_DIR}/_memalloc_tb.cpp
         ${COLLECTOR_DIR}/_memalloc_heap.cpp
         ${COLLECTOR_DIR}/_memalloc_reentrant.cpp
-        pyroscope/Pyroscope.h)
+)
 
-set(PYROSCOPE_FFI_INCLUDE_DIR "" CACHE PATH "Directory containing pyroscope_ffi.h")
-if (NOT PYROSCOPE_FFI_INCLUDE_DIR)
-    message(FATAL_ERROR "PYROSCOPE_FFI_INCLUDE_DIR must be set")
-endif ()
+set(STACK_SOURCES
+        ${PROFILING_DIR}/dd_wrapper/src/profiler_state.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/pyroscope/stack_ffi.cpp
+        ${PROFILING_DIR}/stack/src/echion/danger.cc
+        ${PROFILING_DIR}/stack/src/echion/frame.cc
+        ${PROFILING_DIR}/stack/src/echion/greenlets.cc
+        ${PROFILING_DIR}/stack/src/echion/interp.cc
+        ${PROFILING_DIR}/stack/src/echion/long.cc
+        ${PROFILING_DIR}/stack/src/echion/mirrors.cc
+        ${PROFILING_DIR}/stack/src/echion/stack_chunk.cc
+        ${PROFILING_DIR}/stack/src/echion/stacks.cc
+        ${PROFILING_DIR}/stack/src/echion/strings.cc
+        ${PROFILING_DIR}/stack/src/echion/tasks.cc
+        ${PROFILING_DIR}/stack/src/echion/threads.cc
+        ${PROFILING_DIR}/stack/src/echion/vm.cc
+        ${PROFILING_DIR}/stack/src/gc_frame_tracker.cpp
+        ${PROFILING_DIR}/stack/src/origin_task_links.cpp
+        ${PROFILING_DIR}/stack/src/sampler.cpp
+        ${PROFILING_DIR}/stack/src/span_links.cpp
+        ${PROFILING_DIR}/stack/src/stack_renderer.cpp
+)
 
 set(FULL_EXTENSION_NAME "datadog_mem_profiler")
 
-add_library(${FULL_EXTENSION_NAME} STATIC ${SOURCE_FILES})
+add_library(pyroscope_common INTERFACE)
+target_include_directories(pyroscope_common INTERFACE
+        ${CMAKE_CURRENT_SOURCE_DIR}/pyroscope
+        ${COLLECTOR_DIR}
+        ${PROFILING_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/../rust/include
+)
+target_include_directories(pyroscope_common SYSTEM INTERFACE ${Python3_INCLUDE_DIRS})
+
+add_library(pyroscope_memalloc OBJECT ${MEMALLOC_SOURCES})
+target_link_libraries(pyroscope_memalloc PRIVATE pyroscope_common absl::flat_hash_map)
+
+add_library(pyroscope_stack OBJECT ${STACK_SOURCES})
+target_link_libraries(pyroscope_stack PRIVATE pyroscope_common)
+target_include_directories(pyroscope_stack PRIVATE ${PROFILING_DIR}/stack/include)
+target_include_directories(pyroscope_stack PRIVATE ${PROFILING_DIR}/dd_wrapper/include)
+target_include_directories(pyroscope_stack SYSTEM PRIVATE
+        ${PROFILING_DIR}/stack/echion
+)
+target_compile_definitions(pyroscope_stack PRIVATE
+        $<IF:$<BOOL:${APPLE}>,PL_DARWIN,PL_LINUX>
+)
+target_compile_options(pyroscope_stack PRIVATE -Wshadow -Wnon-virtual-dtor -Wold-style-cast)
+
+target_compile_options(pyroscope_memalloc PRIVATE -Werror)
+target_compile_options(pyroscope_stack PRIVATE -Werror)
+set_source_files_properties(${PROFILING_DIR}/stack/src/echion/vm.cc PROPERTIES COMPILE_OPTIONS -Wno-unused-function)
+
+add_library(${FULL_EXTENSION_NAME} STATIC
+        $<TARGET_OBJECTS:pyroscope_memalloc>
+        $<TARGET_OBJECTS:pyroscope_stack>
+)
+set_target_properties(${FULL_EXTENSION_NAME} PROPERTIES LINKER_LANGUAGE CXX)
 
 
 # Set properties to prevent CMake from adding any prefix or suffix
@@ -90,16 +131,6 @@ add_library(${FULL_EXTENSION_NAME} STATIC ${SOURCE_FILES})
 if (DEFINED LIB_INSTALL_DIR)
     set_target_properties(${FULL_EXTENSION_NAME} PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${LIB_INSTALL_DIR})
 endif ()
-
-# Include directories
-target_include_directories(
-        ${FULL_EXTENSION_NAME}
-        PRIVATE ${Python3_INCLUDE_DIRS}
-        ${CMAKE_CURRENT_SOURCE_DIR}/pyroscope
-        ${COLLECTOR_DIR}
-        ${PROFILING_DIR}
-        ${PYROSCOPE_FFI_INCLUDE_DIR}
-)
 
 # Link libraries Python3::Python target might not exist in all build environments (e.g., manylinux) Python modules
 # should use -undefined dynamic_lookup on macOS and not link to libpython on Linux

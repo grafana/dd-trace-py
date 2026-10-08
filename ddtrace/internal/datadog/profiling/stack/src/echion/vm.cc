@@ -82,17 +82,18 @@ probe_process_vm_readv()
     return result == static_cast<ssize_t>(sizeof(src));
 }
 
-__attribute__((constructor)) void
-init_safe_copy()
+// Pyroscope patch: called from pyroscope_stack_configure, not a constructor; no env opt-out.
+void
+init_safe_copy(bool fast_copy_requested)
 {
     // Always probe process_vm_readv so we know whether it is a valid fallback.
     process_vm_readv_available = probe_process_vm_readv();
 
-    // Honor the fast-copy opt-out: when disabled via env var or when Python is
-    // embedded, skip installing the SIGSEGV/SIGBUS handlers entirely.
-    // Embedded interpreters must never use safe_memcpy because the host process
-    // owns the signal handlers.
-    if (fast_copy_env_disabled() || is_python_embedded()) {
+    // Honor the fast-copy opt-out: when not requested or when Python is
+    // embedded, skip installing the SIGSEGV/SIGBUS handlers and alt stack
+    // entirely. Embedded interpreters must never use safe_memcpy because the
+    // host process owns the signal handlers.
+    if (!fast_copy_requested || is_python_embedded()) {
         fast_copy_user_disabled = true;
         if (process_vm_readv_available) {
             safe_copy = process_vm_readv;
@@ -121,12 +122,13 @@ init_safe_copy()
     }
 }
 #elif defined PL_DARWIN
-__attribute__((constructor)) void
-init_safe_copy()
+// Pyroscope patch: called from pyroscope_stack_configure, not a constructor; no env opt-out.
+void
+init_safe_copy(bool fast_copy_requested)
 {
-    // Honor the fast-copy opt-out: skip installing signal handlers when
-    // disabled or when Python is embedded (host owns signal handlers).
-    if (fast_copy_env_disabled() || is_python_embedded()) {
+    // Honor the fast-copy opt-out: skip installing signal handlers when not
+    // requested or when Python is embedded (host owns signal handlers).
+    if (!fast_copy_requested || is_python_embedded()) {
         fast_copy_user_disabled = true;
         return;
     }

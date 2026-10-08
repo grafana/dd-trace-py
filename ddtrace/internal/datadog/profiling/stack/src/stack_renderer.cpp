@@ -193,20 +193,7 @@ StackRenderer::render_frame(Frame& frame)
         filename_id = maybe_filename_id->second;
     }
 
-    function_id function_id;
-    auto maybe_function_id = function_id_cache.find({ name_id, filename_id });
-    if (maybe_function_id == function_id_cache.end()) {
-        auto maybe_interned_function_id = Datadog::intern_function(name_id, filename_id);
-        if (!maybe_interned_function_id) {
-            return;
-        }
-        function_id = *maybe_interned_function_id;
-        function_id_cache.insert({ { static_cast<void*>(name_id), static_cast<void*>(filename_id) }, function_id });
-    } else {
-        function_id = maybe_function_id->second;
-    }
-
-    sample->push_frame(function_id, 0, line);
+    sample->push_frame(name_id, filename_id, line);
 }
 
 void
@@ -252,21 +239,7 @@ StackRenderer::render_native_frame(const std::string& name, const std::string& m
     }
     auto filename_id = *maybe_filename_id;
 
-    // Reuse the same function_id_cache as render_frame to avoid redundant intern_function calls
-    function_id fid;
-    auto cached = function_id_cache.find({ name_id, filename_id });
-    if (cached == function_id_cache.end()) {
-        auto maybe_fid = Datadog::intern_function(name_id, filename_id);
-        if (!maybe_fid) {
-            return;
-        }
-        fid = *maybe_fid;
-        function_id_cache.insert({ { static_cast<void*>(name_id), static_cast<void*>(filename_id) }, fid });
-    } else {
-        fid = cached->second;
-    }
-
-    sample->push_frame(fid, 1, 0);
+    sample->push_frame(name_id, filename_id, 0);
 }
 
 void
@@ -304,8 +277,6 @@ StackRenderer::abort_sample()
 
 Datadog::StackRenderer::StackRenderer()
 {
-    function_id_cache.reserve(100'000);
-    function_id_cache.max_load_factor(0.7f);
     string_id_cache.reserve(100'000);
     string_id_cache.max_load_factor(0.7f);
 }
@@ -314,14 +285,19 @@ void
 Datadog::StackRenderer::postfork_child()
 {
     // Use placement new instead of clear because the sampling thread may
-    // have been mid-rehash on either cache when fork was called.
+    // have been mid-rehash on the cache when fork was called.
     // Traversing the buckets to free nodes would crash if they were left
     // in an inconsistent state.
     new (&string_id_cache) std::unordered_map<StringTable::Key, string_id>();
-    new (&function_id_cache)
-      std::unordered_map<internal::PtrPair, function_id, internal::PtrPairHash, internal::PtrPairEq>();
 
     // The vanished sampling thread may have been mutating this Sample when fork captured it. Clearing or returning the
     // child copy could traverse inconsistent vectors, so intentionally abandon at most this one in-flight child copy.
     [[maybe_unused]] Sample* abandoned_sample = sample.release();
+}
+
+// Pyroscope patch: no upstream equivalent; see pyroscope_stack_stop.
+void
+Datadog::StackRenderer::reset_string_cache()
+{
+    string_id_cache.clear();
 }

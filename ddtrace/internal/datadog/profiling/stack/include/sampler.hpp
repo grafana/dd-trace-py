@@ -32,11 +32,12 @@ struct SamplingThreadError
     std::string message;
 };
 
+// Pyroscope patch: explicit values, mirrored by PauseResult in pyroscope-python's rust/src/stack.rs.
 enum class PauseResult : std::uint8_t
 {
-    Paused,     // sampler was running and is now paused
-    NotRunning, // sampler was not running (nothing to pause)
-    Timeout,    // sampler is running but did not pause within the timeout
+    Paused = 0,     // sampler was running and is now paused
+    NotRunning = 1, // sampler was not running (nothing to pause)
+    Timeout = 2,    // sampler is running but did not pause within the timeout
 };
 
 class Sampler
@@ -174,6 +175,8 @@ class Sampler
     // update the next rate with the latest interval. This is not perfect because the adjustment is based on
     // self-time, and we're not currently accounting for the echion self-time.
     void set_interval(double new_interval);
+    // Pyroscope patch: getter so the pprof period tracks the adaptive interval.
+    microsecond_t get_interval_us() const { return sample_interval_us.load(); }
     bool set_max_frames(uint64_t value);
     [[nodiscard]] size_t max_frames() const;
     [[nodiscard]] size_t frame_cache_capacity() const;
