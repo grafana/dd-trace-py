@@ -165,6 +165,8 @@ target_compile_options(pyroscope_stack PRIVATE -Wshadow -Wnon-virtual-dtor -Wold
 # those, and it is not warning-free (144 warnings under clang 21).
 target_compile_options(pyroscope_memalloc PRIVATE -Werror)
 target_compile_options(pyroscope_stack PRIVATE -Werror)
+# Upstream's fast_copy_env_disabled is kept verbatim but unused: the opt-out is a configure argument.
+set_source_files_properties(${PROFILING_DIR}/stack/src/echion/vm.cc PROPERTIES COMPILE_OPTIONS -Wno-unused-function)
 
 # LINKER_LANGUAGE is required: a target whose only sources are TARGET_OBJECTS
 # gives CMake nothing to infer the language from.

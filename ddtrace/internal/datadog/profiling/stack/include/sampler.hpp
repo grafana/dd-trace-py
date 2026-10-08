@@ -175,9 +175,7 @@ class Sampler
     // update the next rate with the latest interval. This is not perfect because the adjustment is based on
     // self-time, and we're not currently accounting for the echion self-time.
     void set_interval(double new_interval);
-    // Pyroscope patch: the pprof period has to report the interval the sampler
-    // is actually running at, which adaptive sampling moves. Upstream has no
-    // getter -- it ships the interval as a stat instead.
+    // Pyroscope patch: getter so the pprof period tracks the adaptive interval.
     microsecond_t get_interval_us() const { return sample_interval_us.load(); }
     bool set_max_frames(uint64_t value);
     [[nodiscard]] size_t max_frames() const;

@@ -9,6 +9,18 @@
 
 #include <echion/vm.h>
 
+// Returns true when _DD_PROFILING_STACK_FAST_COPY is set to a falsy value.
+// Called only during static init (constructor time), so getenv is safe here.
+static bool
+fast_copy_env_disabled()
+{
+    const char* val = getenv("_DD_PROFILING_STACK_FAST_COPY");
+    if (val == nullptr) {
+        return false;
+    }
+    return strcmp(val, "0") == 0 || strcmp(val, "false") == 0 || strcmp(val, "False") == 0;
+}
+
 // Checks whether Python is running as an embedded interpreter by checking
 // whether the process executable looks like a Python binary.
 //
@@ -70,8 +82,7 @@ probe_process_vm_readv()
     return result == static_cast<ssize_t>(sizeof(src));
 }
 
-// Pyroscope patch: not a constructor; pyroscope_stack_configure calls it, and
-// fast_copy_requested replaces the _DD_PROFILING_STACK_FAST_COPY env opt-out.
+// Pyroscope patch: called from pyroscope_stack_configure, not a constructor; no env opt-out.
 void
 init_safe_copy(bool fast_copy_requested)
 {
@@ -111,8 +122,7 @@ init_safe_copy(bool fast_copy_requested)
     }
 }
 #elif defined PL_DARWIN
-// Pyroscope patch: not a constructor; pyroscope_stack_configure calls it, and
-// fast_copy_requested replaces the _DD_PROFILING_STACK_FAST_COPY env opt-out.
+// Pyroscope patch: called from pyroscope_stack_configure, not a constructor; no env opt-out.
 void
 init_safe_copy(bool fast_copy_requested)
 {
