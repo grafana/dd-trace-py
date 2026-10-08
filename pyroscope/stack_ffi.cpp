@@ -60,9 +60,9 @@ pyroscope_stack_take_sampling_thread_error() noexcept
 }
 
 extern "C" void
-pyroscope_stack_register_thread(uint64_t id, uint64_t native_id, const char* name)
+pyroscope_stack_register_thread(uint64_t id, uint64_t native_id)
 {
-    Datadog::Sampler::get().register_thread(id, native_id, name);
+    Datadog::Sampler::get().register_thread(id, native_id, "");
 }
 
 extern "C" void
