@@ -90,11 +90,6 @@ set(MEMALLOC_SOURCES
         ${COLLECTOR_DIR}/_memalloc_reentrant.cpp
 )
 
-set(PYROSCOPE_FFI_INCLUDE_DIR "" CACHE PATH "Directory containing pyroscope_ffi.h")
-if (NOT PYROSCOPE_FFI_INCLUDE_DIR)
-    message(FATAL_ERROR "PYROSCOPE_FFI_INCLUDE_DIR must be set")
-endif ()
-
 set(STACK_SOURCES
         # Pyroscope patch: the dd_wrapper half. Upstream builds these into a
         # separate shared libdd_wrapper that stack_v2 links against; we archive
@@ -133,7 +128,7 @@ target_include_directories(pyroscope_common INTERFACE
         ${CMAKE_CURRENT_SOURCE_DIR}/pyroscope
         ${COLLECTOR_DIR}
         ${PROFILING_DIR}
-        ${PYROSCOPE_FFI_INCLUDE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/../rust/include
 )
 target_include_directories(pyroscope_common SYSTEM INTERFACE ${Python3_INCLUDE_DIRS})
 
