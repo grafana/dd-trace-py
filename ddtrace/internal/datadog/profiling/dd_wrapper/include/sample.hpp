@@ -16,8 +16,8 @@
 
 #include "Pyroscope.h"
 #include "profiler_stats.hpp"
+#include "pyroscope_intern.h"
 
-#include <optional>
 #include <string_view>
 #include <vector>
 
@@ -69,12 +69,5 @@ struct StringArena
 
 using Sample = Pyroscope::Sample;
 using string_id = Pyroscope::string_id;
-
-// Pyroscope patch: never nullopt; a failed intern yields index 0.
-inline std::optional<string_id>
-intern_string(std::string_view s)
-{
-    return Pyroscope::intern_utf8_string(s);
-}
 
 } // namespace Datadog
