@@ -16,19 +16,10 @@
 
 #include "dd_wrapper/include/sample.hpp"
 
-// Pyroscope patch: interned string ids come from Pyroscope's Rust-backed
-// string table instead of libdatadog's Profiles Dictionary.
-#include "Pyroscope.h"
-
 #include "echion/frame.h"
 #include "echion/timing.h"
 
 namespace Datadog {
-
-// Pyroscope patch: upstream gets this typedef from
-// dd_wrapper/include/sample.hpp, where it is an opaque libdatadog handle
-// (ddog_prof_StringId2). Pyroscope's is a { uint32_t index; } struct.
-using string_id = Pyroscope::string_id;
 
 struct ThreadState
 {

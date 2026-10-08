@@ -12,20 +12,24 @@
  * It carries interned string ids from the Rust-backed string table rather than
  * Profiles Dictionary handles, and has no label storage at all, so the arena
  * has nothing to hold. See cpp/pyroscope/Pyroscope.h, which documents the
- * differences method by method, and note that cpp/stack/include/stack_renderer.hpp
- * already re-aliases Datadog::string_id to Pyroscope::string_id.
- *
- * intern_string and intern_function are not re-exported here: the vendored
- * stack sampler calls Pyroscope::intern_utf8_string directly, and there is no
- * function interning (commits "replace Datadog::intern_string with a shared
- * string table" and "replace Datadog::intern_function by reusing the encoder's
- * dedup"). */
+ * differences method by method. */
 
 #include "Pyroscope.h"
 #include "profiler_stats.hpp"
 
+#include <optional>
+#include <string_view>
+
 namespace Datadog {
 
 using Sample = Pyroscope::Sample;
+using string_id = Pyroscope::string_id;
+
+// Pyroscope patch: never nullopt; a failed intern yields index 0.
+inline std::optional<string_id>
+intern_string(std::string_view s)
+{
+    return Pyroscope::intern_utf8_string(s);
+}
 
 } // namespace Datadog
