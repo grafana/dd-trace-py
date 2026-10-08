@@ -16,7 +16,6 @@
 
 #include "Pyroscope.h"
 #include "profiler_stats.hpp"
-#include "pyroscope_intern.h"
 
 #include <string_view>
 #include <vector>

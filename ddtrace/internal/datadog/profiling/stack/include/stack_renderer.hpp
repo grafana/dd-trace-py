@@ -21,6 +21,39 @@
 
 namespace Datadog {
 
+enum class MetricType : std::uint8_t
+{
+    Time,
+    Memory
+};
+
+namespace internal {
+
+struct PtrPair
+{
+    void* a;
+    void* b;
+};
+
+struct PtrPairHash
+{
+    // Hash combining using the golden ratio constant (2^64 / phi).
+    // This is a standard technique similar to boost::hash_combine.
+    inline size_t operator()(const PtrPair& p) const noexcept
+    {
+        uintptr_t h1 = reinterpret_cast<uintptr_t>(p.a);
+        uintptr_t h2 = reinterpret_cast<uintptr_t>(p.b);
+        return h1 ^ (h2 * 0x9e3779b97f4a7c15ULL);
+    }
+};
+
+struct PtrPairEq
+{
+    inline bool operator()(const PtrPair& x, const PtrPair& y) const noexcept { return x.a == y.a && x.b == y.b; }
+};
+
+} // namespace internal
+
 struct ThreadState
 {
     // Current thread info.  Keeping one instance of this per StackRenderer is sufficient because the renderer visits
@@ -47,18 +80,10 @@ class StackRenderer
     SampleHandle sample;
     ThreadState thread_state = {};
 
-    // Pyroscope patch: memoises echion's StringTable::Key -> Pyroscope::string_id
-    // so a frame we have seen before costs one hash lookup instead of a call
-    // across the FFI boundary. Upstream also cached function IDs here; we do
-    // not, because Pyroscope has no function ids -- function and location
-    // dedup is the Rust encoder's job (PProfBuilder::add_function_mirror).
-    //
-    // Keep this cache. It is load-bearing for us in a way it was not upstream:
-    // libdatadog interns into a 16-way sharded set whose hit path takes only a
-    // read lock, whereas our string table is a single mutex held exclusively
-    // even on a hit. This cache is what keeps interning a once-per-unique-frame
-    // cost rather than a global lock acquisition per frame on the sampling
-    // thread.
+    // Caches for interned strings and function IDs. These are used to avoid
+    // re-interning the same strings and function IDs multiple times (even though libdatadog
+    // deduplicates entries, keeping track of which items have been interned is faster than
+    // trying to re-intern them).
     std::unordered_map<StringTable::Key, string_id> string_id_cache;
 
   public:
