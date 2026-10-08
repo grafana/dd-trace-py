@@ -193,10 +193,6 @@ StackRenderer::render_frame(Frame& frame)
         filename_id = maybe_filename_id->second;
     }
 
-    // Pyroscope patch: no function-interning step. The Rust encoder dedupes
-    // functions on (name, filename) itself, so the interned string ids are all
-    // the sample needs. Upstream's frame-address argument is dropped; see the
-    // TODO on Pyroscope::Sample::push_frame.
     sample->push_frame(name_id, filename_id, line);
 }
 
@@ -219,7 +215,6 @@ StackRenderer::render_gc_frame()
     sample->push_frame("Garbage collection", "<runtime>", 0, 0);
 }
 
-// Pyroscope patch: no function id; see render_frame.
 void
 StackRenderer::render_native_frame(const std::string& name, const std::string& module)
 {
