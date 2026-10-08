@@ -66,7 +66,4 @@ struct StringArena
 
 } // namespace internal
 
-using Sample = Pyroscope::Sample;
-using string_id = Pyroscope::string_id;
-
 } // namespace Datadog

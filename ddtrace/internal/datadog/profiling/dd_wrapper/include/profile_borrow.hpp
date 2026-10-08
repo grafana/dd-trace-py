@@ -1,33 +1,29 @@
 #pragma once
 
-#include "profile.hpp"
+#include "profiler_stats.hpp"
 
 namespace Datadog {
-
-// Forward declaration
-class Profile;
 
 // RAII wrapper for borrowing both profile and stats under a single lock
 class ProfileBorrow
 {
-  private:
-    Profile* profile_ptr;
-
   public:
-    explicit ProfileBorrow(Profile& profile);
-    ~ProfileBorrow();
+    ProfileBorrow() = default;
 
     // Disable copy
     ProfileBorrow(const ProfileBorrow&) = delete;
     ProfileBorrow& operator=(const ProfileBorrow&) = delete;
 
     // Enable move
-    ProfileBorrow(ProfileBorrow&& other) noexcept;
-    ProfileBorrow& operator=(ProfileBorrow&& other) noexcept;
+    ProfileBorrow(ProfileBorrow&& other) noexcept = default;
+    ProfileBorrow& operator=(ProfileBorrow&& other) noexcept = default;
 
     // Accessors
-    ddog_prof_Profile& profile();
-    ProfilerStats& stats();
+    ProfilerStats& stats()
+    {
+        static ProfilerStats stats;
+        return stats;
+    }
 };
 
 } // namespace Datadog
