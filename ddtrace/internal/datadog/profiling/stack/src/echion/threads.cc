@@ -934,6 +934,10 @@ ThreadInfo::sample(EchionSampler& echion, PyThreadState* tstate, microsecond_t d
         return ErrorKind::CpuTimeError;
     }
 
+    if (echion.oncpu() && cpu_time == previous_cpu_time) {
+        return Result<void>::ok();
+    }
+
     auto unwind_result = this->unwind(echion, tstate, delta);
     if (!unwind_result) {
         return unwind_result.error();
