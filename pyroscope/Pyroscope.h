@@ -3,8 +3,11 @@
 //
 #pragma once
 
+#include <optional>
 #include <string_view>
 #include <vector>
+
+#include "dd_wrapper/include/profile_borrow.hpp"
 
 
 extern "C" {
@@ -57,6 +60,7 @@ namespace Pyroscope
         {
             frames.reserve(max_nframes + 1);
         }
+
 
 
         void push_frame(const string_id function_name, const string_id file_name, const int line)
@@ -121,9 +125,66 @@ namespace Pyroscope
 
         void push_threadinfo([[maybe_unused]] int64_t thread_id,
                              [[maybe_unused]] int64_t thread_native_id,
-                             [[maybe_unused]] const char* name)
+                             [[maybe_unused]] const std::string_view name)
         {
             // no-op
+        }
+
+        void push_monotonic_ns([[maybe_unused]] int64_t monotonic_ns)
+        {
+            // no-op
+        }
+
+        void push_walltime(const int64_t walltime, [[maybe_unused]] const int64_t count)
+        {
+            values.wall_time += walltime;
+        }
+
+        void push_cputime(const int64_t cputime, [[maybe_unused]] const int64_t count)
+        {
+            values.cpu_time += cputime;
+        }
+
+        void push_span_id([[maybe_unused]] uint64_t span_id)
+        {
+            // no-op
+        }
+
+        void push_local_root_span_id([[maybe_unused]] uint64_t local_root_span_id)
+        {
+            // no-op
+        }
+
+        void push_trace_type([[maybe_unused]] const std::string_view trace_type)
+        {
+            // no-op
+        }
+
+        void push_task_name([[maybe_unused]] const std::string_view task_name)
+        {
+            // no-op
+        }
+
+        void push_task_id([[maybe_unused]] uint64_t task_id)
+        {
+            // no-op
+        }
+
+        void push_origin_task_id([[maybe_unused]] uint64_t origin_task_id)
+        {
+            // no-op
+        }
+
+        void push_origin_task_name([[maybe_unused]] const std::string_view origin_task_name)
+        {
+            // no-op
+        }
+
+
+        void flush_sample()
+        {
+            export_sample();
+            clear();
         }
 
         // Pyroscope patch: appends one countless "<truncated>" frame where
@@ -132,5 +193,25 @@ namespace Pyroscope
         {
             truncated = true;
         }
+
+        /* Stats sink for the vendored stack sampler; see ProfilerStats. */
+        static Datadog::ProfileBorrow profile_borrow()
+        {
+            return Datadog::ProfileBorrow{};
+        }
     };
 }
+
+namespace Datadog {
+
+using Sample = Pyroscope::Sample;
+using string_id = Pyroscope::string_id;
+
+// Pyroscope patch: never nullopt; a failed intern yields index 0.
+inline std::optional<Pyroscope::string_id>
+intern_string(std::string_view s)
+{
+    return Pyroscope::intern_utf8_string(s);
+}
+
+} // namespace Datadog
