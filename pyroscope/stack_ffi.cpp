@@ -6,7 +6,6 @@
 #include "echion/echion_sampler.h"
 #include "echion/vm.h"
 
-#include <cstddef>
 #include <cstdint>
 #include <mutex>
 
@@ -70,12 +69,4 @@ pyroscope_stack_unregister_thread(uint64_t id)
 {
     Datadog::Sampler::get().unregister_thread(id);
     Datadog::SpanLinks::get_instance().unlink_span(id);
-}
-
-extern "C" size_t
-pyroscope_stack_thread_count()
-{
-    auto& echion = Datadog::Sampler::get().get_echion();
-    const std::lock_guard<std::mutex> guard{ echion.thread_info_map_lock() };
-    return echion.thread_info_map().size();
 }
