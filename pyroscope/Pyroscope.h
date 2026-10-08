@@ -55,10 +55,6 @@ namespace Pyroscope
         }
 
     public:
-        /* The leading underscore matches upstream's Sample(SampleType,
-         * unsigned int _max_nframes) and is load-bearing: pyroscope_stack
-         * compiles with -Wshadow (part of upstream's add_ddup_config warning
-         * set), and a parameter named after the member warns there. */
         Sample(const size_t _max_nframes, const PprofBuilderType _builder_type)
             : max_nframes{_max_nframes}, builder_type{_builder_type}
         {
