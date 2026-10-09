@@ -63,6 +63,11 @@ namespace Pyroscope
 
 
 
+        void set_builder_type(const PprofBuilderType _builder_type)
+        {
+            builder_type = _builder_type;
+        }
+
         void push_frame(const string_id function_name, const string_id file_name, const int line)
         {
             if (frames.size() >= max_nframes)

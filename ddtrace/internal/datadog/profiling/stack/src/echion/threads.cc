@@ -943,7 +943,7 @@ ThreadInfo::sample(EchionSampler& echion, PyThreadState* tstate, microsecond_t d
         return unwind_result.error();
     }
 
-    renderer.render_cpu_time(cpu_time - previous_cpu_time);
+    renderer.render_cpu_time(cpu_time - previous_cpu_time, echion.oncpu());
 
     this->render_unwound_stacks(echion);
 
