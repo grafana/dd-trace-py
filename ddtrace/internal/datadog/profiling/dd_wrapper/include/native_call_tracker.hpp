@@ -3,9 +3,7 @@
 #include <cstdint>
 #include <functional>
 #include <optional>
-#include <shared_mutex>
 #include <string>
-#include <unordered_map>
 
 namespace Datadog {
 
@@ -38,51 +36,11 @@ struct NativeCallEntry
     std::string module;
 };
 
+// Pyroscope patch: always-empty stub; nothing registers call sites without upstream's stack.cpp.
 class NativeCallRegistry
 {
   public:
-    // Dynamic code generators can produce an unbounded number of one-shot code
-    // objects, so stop registering new sites once the registry reaches its cap.
-    static constexpr size_t max_call_sites = 4096;
-
-    NativeCallRegistry() = default;
-    ~NativeCallRegistry() = default;
-
-    NativeCallRegistry(NativeCallRegistry const&) = delete;
-    NativeCallRegistry& operator=(NativeCallRegistry const&) = delete;
-
-    void register_call_site(uintptr_t code_ptr,
-                            int offset_bytes,
-                            int first_lineno,
-                            std::string name,
-                            std::string module);
-
-    // Checks if there is a known native call metadata object for a bytecode location and
-    // returns it when found.
-    // Note: it is safe to return a reference to the NativeCallEntry because according to
-    // the standard, "References and pointers to either key or data stored in the container
-    // are only invalidated by erasing that element, even when the corresponding iterator
-    // is invalidated."
-    // All the emplace's we do happen under the lock, which means there can never be a
-    // duplicate emplace happening (as we check for existence first).
-    std::optional<std::reference_wrapper<NativeCallEntry>> lookup(uintptr_t code_ptr,
-                                                                  int offset_bytes,
-                                                                  int first_lineno);
-
-    // Clears the registry.
-    // Note: this frees the NativeCallEntry's, meaning any reference to a NativeCallEntry from
-    // the map is invalid after calling reset.
-    // Ensure reset is only ever called after users of lookup (and its return values) have been
-    // stopped (typically, the sampling thread).
-    void reset();
-
-    void postfork_child();
-
-    size_t size() const;
-
-  private:
-    mutable std::shared_mutex mtx;
-    std::unordered_map<CallSiteKey, NativeCallEntry, CallSiteKeyHash> call_sites;
+    std::optional<std::reference_wrapper<NativeCallEntry>> lookup(uintptr_t, int, int) { return std::nullopt; }
 };
 
 } // namespace Datadog

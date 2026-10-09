@@ -742,15 +742,11 @@ stack_atfork_child()
     // Clean up Sampler state, do not start the Sampler yet.
     stack_postfork_cleanup();
 
-    // Restart the sampler if it was running before fork.
-    // OriginTaskLinks was left disabled in postfork_child; re-enable when the
-    // child sampler is started again.
-    if (Sampler::get().restart_after_fork()) {
-        OriginTaskLinks::get_instance().enable();
-    }
+    // Pyroscope patch: the agent is dead in the child; never restart.
 }
 
-__attribute__((constructor)) void
+// Pyroscope patch: not a constructor; one_time_setup covers it.
+void
 stack_init()
 {
     _set_pid(getpid());

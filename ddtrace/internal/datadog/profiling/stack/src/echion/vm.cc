@@ -92,7 +92,7 @@ init_safe_copy()
     // embedded, skip installing the SIGSEGV/SIGBUS handlers entirely.
     // Embedded interpreters must never use safe_memcpy because the host process
     // owns the signal handlers.
-    if (fast_copy_env_disabled() || is_python_embedded()) {
+    if (true || fast_copy_env_disabled() || is_python_embedded()) { // Pyroscope patch: fast copy is not enabled yet.
         fast_copy_user_disabled = true;
         if (process_vm_readv_available) {
             safe_copy = process_vm_readv;
@@ -126,7 +126,7 @@ init_safe_copy()
 {
     // Honor the fast-copy opt-out: skip installing signal handlers when
     // disabled or when Python is embedded (host owns signal handlers).
-    if (fast_copy_env_disabled() || is_python_embedded()) {
+    if (true || fast_copy_env_disabled() || is_python_embedded()) { // Pyroscope patch: fast copy is not enabled yet.
         fast_copy_user_disabled = true;
         return;
     }

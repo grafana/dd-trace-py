@@ -85,7 +85,6 @@ class StackRenderer
     // deduplicates entries, keeping track of which items have been interned is faster than
     // trying to re-intern them).
     std::unordered_map<StringTable::Key, string_id> string_id_cache;
-    std::unordered_map<internal::PtrPair, function_id, internal::PtrPairHash, internal::PtrPairEq> function_id_cache;
 
   public:
     StackRenderer();
@@ -110,6 +109,8 @@ class StackRenderer
 
     // Clear caches after fork to avoid using stale interned string/function IDs
     void postfork_child();
+
+    void reset_string_cache();
 };
 
 } // namespace Datadog
