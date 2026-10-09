@@ -174,6 +174,7 @@ class Sampler
     // update the next rate with the latest interval. This is not perfect because the adjustment is based on
     // self-time, and we're not currently accounting for the echion self-time.
     void set_interval(double new_interval);
+    microsecond_t get_interval_us() const { return sample_interval_us.load(); }
     bool set_max_frames(uint64_t value);
     [[nodiscard]] size_t max_frames() const;
     [[nodiscard]] size_t frame_cache_capacity() const;
