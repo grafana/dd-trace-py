@@ -15,6 +15,7 @@ pyroscope_stack_configure(double interval_s,
                           double fast_copy_warmup_s,
                           uint32_t max_nframes,
                           uint32_t max_threads,
+                          uint32_t max_tasks,
                           bool oncpu,
                           bool adaptive_sampling,
                           double target_overhead,
@@ -30,6 +31,7 @@ pyroscope_stack_configure(double interval_s,
     auto& sampler = Datadog::Sampler::get();
     sampler.set_max_frames(max_nframes);
     sampler.set_max_threads_per_sample(max_threads);
+    sampler.set_max_tasks_per_sample(max_tasks);
     sampler.set_adaptive_sampling(adaptive_sampling);
     sampler.set_target_overhead(target_overhead);
     sampler.set_max_sampling_period(static_cast<microsecond_t>(max_sampling_period_us));
@@ -130,4 +132,41 @@ pyroscope_stack_unregister_thread(uint64_t id)
 {
     Datadog::Sampler::get().unregister_thread(id);
     Datadog::SpanLinks::get_instance().unlink_span(id);
+}
+
+extern "C" void
+pyroscope_stack_init_asyncio(PyObject* scheduled_tasks, PyObject* eager_tasks)
+{
+    Datadog::Sampler::get().init_asyncio(scheduled_tasks, eager_tasks);
+}
+
+extern "C" void
+pyroscope_stack_track_asyncio_loop(uint64_t thread_id, PyObject* loop)
+{
+    Datadog::Sampler::get().track_asyncio_loop(static_cast<uintptr_t>(thread_id), loop);
+}
+
+extern "C" void
+pyroscope_stack_link_tasks(PyObject* parent, PyObject* child)
+{
+    Datadog::Sampler::get().link_tasks(parent, child);
+}
+
+extern "C" void
+pyroscope_stack_weak_link_tasks(PyObject* parent, PyObject* child)
+{
+    Datadog::Sampler::get().weak_link_tasks(parent, child);
+}
+
+extern "C" bool
+pyroscope_stack_set_uvloop_mode(uint64_t thread_id, bool value)
+{
+    auto& sampler = Datadog::Sampler::get();
+    sampler.set_uvloop_mode(static_cast<uintptr_t>(thread_id), value);
+
+    auto& echion = sampler.get_echion();
+    const std::lock_guard<std::mutex> guard{ echion.thread_info_map_lock() };
+    auto& map = echion.thread_info_map();
+    auto it = map.find(static_cast<uintptr_t>(thread_id));
+    return it != map.end() && it->second->using_uvloop == value;
 }
