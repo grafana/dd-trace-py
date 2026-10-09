@@ -97,6 +97,7 @@ StackRenderer::render_task_begin(std::string_view task_name,
             failed = true;
             return;
         }
+        sample->set_builder_type(thread_state.builder_type);
 
         // Add thread context into the sample
         sample->push_threadinfo(
@@ -243,8 +244,9 @@ StackRenderer::render_native_frame(const std::string& name, const std::string& m
 }
 
 void
-StackRenderer::render_cpu_time(microsecond_t cpu_time_us)
+StackRenderer::render_cpu_time(microsecond_t cpu_time_us, bool oncpu)
 {
+    thread_state.builder_type = oncpu ? PprofBuilderType_OnCpu : PprofBuilderType_CpuWall;
     if (sample == nullptr) {
         std::cerr << "Received a CPU time without sample storage.  Some profiling data has been lost." << std::endl;
         return;
@@ -254,6 +256,7 @@ StackRenderer::render_cpu_time(microsecond_t cpu_time_us)
     // to the task level, but for now just keep it because this is how the v1 sampler works
     thread_state.cpu_time_ns = 1000 * cpu_time_us;
     sample->push_cputime(thread_state.cpu_time_ns, 1);
+    sample->set_builder_type(thread_state.builder_type);
 }
 
 void
