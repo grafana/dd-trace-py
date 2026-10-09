@@ -34,9 +34,9 @@ struct SamplingThreadError
 
 enum class PauseResult : std::uint8_t
 {
-    Paused,     // sampler was running and is now paused
-    NotRunning, // sampler was not running (nothing to pause)
-    Timeout,    // sampler is running but did not pause within the timeout
+    Paused = 0,     // sampler was running and is now paused
+    NotRunning = 1, // sampler was not running (nothing to pause)
+    Timeout = 2,    // sampler is running but did not pause within the timeout
 };
 
 class Sampler
