@@ -10,7 +10,7 @@
 #include <mutex>
 
 extern "C" void
-pyroscope_stack_configure(double interval_s, uint32_t max_nframes, uint32_t max_threads)
+pyroscope_stack_configure(double interval_s, uint32_t max_nframes, uint32_t max_threads, bool oncpu)
 {
     Datadog::SampleManager::set_max_nframes(max_nframes);
     auto& sampler = Datadog::Sampler::get();
@@ -18,6 +18,7 @@ pyroscope_stack_configure(double interval_s, uint32_t max_nframes, uint32_t max_
     sampler.set_max_threads_per_sample(max_threads);
     sampler.set_adaptive_sampling(false);
     sampler.set_interval(interval_s);
+    sampler.get_echion().set_oncpu(oncpu);
 }
 
 extern "C" bool

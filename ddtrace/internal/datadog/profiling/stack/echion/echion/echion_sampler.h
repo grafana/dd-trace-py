@@ -84,6 +84,8 @@ class EchionSampler
     // 0 means unlimited.
     unsigned int max_tasks_per_sample_ = g_default_max_tasks_per_sample;
 
+    bool oncpu_ = false;
+
     // RNG used for task / greenlet reservoir sampling.
     std::minstd_rand rng_{ std::random_device{}() };
 
@@ -161,6 +163,9 @@ class EchionSampler
 
     unsigned int max_tasks_per_sample() const { return max_tasks_per_sample_; }
     void set_max_tasks_per_sample(unsigned int value) { max_tasks_per_sample_ = value; }
+
+    [[nodiscard]] bool oncpu() const { return oncpu_; }
+    void set_oncpu(bool value) { oncpu_ = value; }
 
     std::minstd_rand& rng() { return rng_; }
 

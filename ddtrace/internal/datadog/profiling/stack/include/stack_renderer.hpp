@@ -66,6 +66,7 @@ struct ThreadState
     microsecond_t wall_time_ns = 0;
     microsecond_t cpu_time_ns = 0;
     int64_t now_time_ns = 0;
+    PprofBuilderType builder_type = PprofBuilderType_CpuWall;
 };
 
 class StackRenderer
@@ -100,7 +101,7 @@ class StackRenderer
     void render_frame(Frame& frame);
     void mark_truncated();
     void render_gc_frame();
-    void render_cpu_time(microsecond_t cpu_time_us);
+    void render_cpu_time(microsecond_t cpu_time_us, bool oncpu);
     void render_native_frame(const std::string& name, const std::string& module);
     void render_stack_end();
 
