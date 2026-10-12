@@ -115,6 +115,7 @@ target_compile_options(pyroscope_stack PRIVATE -Wshadow -Wnon-virtual-dtor -Wold
 
 target_compile_options(pyroscope_memalloc PRIVATE -Werror)
 target_compile_options(pyroscope_stack PRIVATE -Werror)
+set_source_files_properties(${PROFILING_DIR}/stack/src/echion/vm.cc PROPERTIES COMPILE_OPTIONS -Wno-unused-function)
 
 add_library(${FULL_EXTENSION_NAME} STATIC
         $<TARGET_OBJECTS:pyroscope_memalloc>
