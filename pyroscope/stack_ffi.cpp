@@ -1,3 +1,6 @@
+#include <Python.h>
+
+#include "cpu_timer.hpp"
 #include "dd_wrapper/include/sample_manager.hpp"
 #include "pyroscope_ffi.h"
 #include "sampler.hpp"
@@ -47,6 +50,12 @@ extern "C" uint64_t
 pyroscope_stack_interval_us()
 {
     return Datadog::Sampler::get().get_interval_us();
+}
+
+extern "C" void
+pyroscope_stack_set_cpu_timer(bool enabled, uint64_t interval_ms)
+{
+    Datadog::CpuTimer::Engine::get().configure(enabled, interval_ms);
 }
 
 extern "C" bool
@@ -124,7 +133,13 @@ pyroscope_stack_reinstall_segv_handler()
 extern "C" void
 pyroscope_stack_register_thread(uint64_t id, uint64_t native_id)
 {
-    Datadog::Sampler::get().register_thread(id, native_id, "");
+    PyThreadState* tstate = PyThreadState_Get();
+    if (tstate != nullptr && tstate->thread_id != id) {
+        tstate = nullptr;
+    }
+    Py_BEGIN_ALLOW_THREADS;
+    Datadog::Sampler::get().register_thread(id, native_id, "", tstate);
+    Py_END_ALLOW_THREADS;
 }
 
 extern "C" void

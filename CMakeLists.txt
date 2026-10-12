@@ -80,6 +80,7 @@ set(STACK_SOURCES
         ${PROFILING_DIR}/stack/src/echion/tasks.cc
         ${PROFILING_DIR}/stack/src/echion/threads.cc
         ${PROFILING_DIR}/stack/src/echion/vm.cc
+        ${PROFILING_DIR}/stack/src/cpu_timer.cpp
         ${PROFILING_DIR}/stack/src/gc_frame_tracker.cpp
         ${PROFILING_DIR}/stack/src/origin_task_links.cpp
         ${PROFILING_DIR}/stack/src/sampler.cpp
