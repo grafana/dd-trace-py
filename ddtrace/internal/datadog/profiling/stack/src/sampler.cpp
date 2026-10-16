@@ -377,6 +377,8 @@ Sampler::take_sampling_thread_error()
 void
 Sampler::sampling_thread(const uint64_t seq_num)
 {
+    // todo(korniltsev) make the thread do nothing if oncpu and timer is enabled
+
     // The configured CPU accounting mode is frozen before this thread starts. If
     // the CPU timer engine later degrades, wall sampling continues to report only
     // wall time instead of switching CPU accounting mechanisms during the run.
@@ -884,8 +886,11 @@ Sampler::start()
     static std::once_flag once;
     std::call_once(once, [this]() { this->one_time_setup(); });
 
+    auto& cpu_timer = CpuTimer::Engine::get();
+    if (!cpu_timer.start() && cpu_timer.configured_enabled()) {
+        return false;
+    }
     sampler_active_.store(true);
-    CpuTimer::Engine::get().start();
 
     // Mark the thread as running before it is launched, not from the thread itself: otherwise an
     // immediate stop() would early exit and the sampling thread would keep running indefinitely.

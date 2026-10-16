@@ -427,6 +427,17 @@ disable_current_thread_altstack(OwnedAltStack& altstack)
     altstack.installed = false;
 }
 
+void
+unmap_unless_registered(void* mapping, size_t mapping_size)
+{
+    stack_t current{};
+    if (sigaltstack(nullptr, &current) == 0 &&
+        ((current.ss_flags & SS_DISABLE) ||
+         reinterpret_cast<uintptr_t>(current.ss_sp) - reinterpret_cast<uintptr_t>(mapping) >= mapping_size)) {
+        munmap(mapping, mapping_size);
+    }
+}
+
 bool
 install_current_thread_altstack(OwnedAltStack& altstack)
 {
@@ -671,7 +682,7 @@ render_raw_sample(EchionSampler& echion, CaptureState& state, const RawSample& r
     }
 
     auto& renderer = echion.renderer();
-    renderer.render_cpu_sample_begin(state.name, cpu_us, raw.python_thread_id, raw.native_tid);
+    renderer.render_cpu_sample_begin(state.name, cpu_us, raw.python_thread_id, raw.native_tid, echion.oncpu());
     stack.render(echion, TruncationStatus::Unknown);
     renderer.render_stack_end();
 }
@@ -1195,7 +1206,6 @@ Engine::postfork_child()
 #if DD_CPU_TIMER_SUPPORTED
     new (&g_state.registry_lock) std::mutex();
     std::lock_guard<std::mutex> lock(g_state.registry_lock);
-    const bool was_active = g_state.active.load(std::memory_order_acquire);
     g_state.active.store(false, std::memory_order_release);
 
     const pid_t current_tid = raw_gettid();
@@ -1205,39 +1215,25 @@ Engine::postfork_child()
             disable_current_thread_altstack(state.altstack);
         } else if (state.altstack.installed && !state.altstack.using_existing && !state.altstack.detached &&
                    state.altstack.mapping != nullptr) {
-            munmap(state.altstack.mapping, state.altstack.mapping_size);
+            unmap_unless_registered(state.altstack.mapping, state.altstack.mapping_size);
             state.altstack.mapping = nullptr;
         }
     }
     for (auto& state : g_state.retired) {
         if (state->altstack.installed && !state->altstack.using_existing && !state->altstack.detached &&
             state->altstack.mapping != nullptr) {
-            munmap(state->altstack.mapping, state->altstack.mapping_size);
+            unmap_unless_registered(state->altstack.mapping, state->altstack.mapping_size);
             state->altstack.mapping = nullptr;
         }
     }
     for (auto& leaked : g_state.leaked_altstacks) {
-        munmap(leaked.first, leaked.second);
+        unmap_unless_registered(leaked.first, leaked.second);
     }
     g_state.leaked_altstacks.clear();
     g_state.live_by_thread_id.clear();
     g_state.retired.clear();
     g_state.tid_table.reset();
-    if (was_active && !g_state.stopped_once.load(std::memory_order_acquire) &&
-        !g_state.permanently_disabled.load(std::memory_order_acquire)) {
-        register_profiling_fault_recover(cpu_timer_fault_recover);
-        if (init_profiling_fault_handler() == 0 && install_sigprof_handler()) {
-            // Do not forward foreign SIGPROF to a handler inherited across a
-            // multi-threaded fork. The inherited handler may depend on runtime state that
-            // only existed in now-vanished parent threads. Own timer signals still carry
-            // g_cookie and are handled normally; foreign SIGPROF is dropped in the child.
-            g_state.has_previous_sigprof.store(false, std::memory_order_release);
-            g_state.active.store(true, std::memory_order_release);
-        } else {
-            unregister_profiling_fault_recover(cpu_timer_fault_recover);
-            g_state.permanently_disabled.store(true, std::memory_order_release);
-        }
-    }
+    // Pyroscope patch: no re-arm; the child never restarts and at_fork_after_in_child shuts the engine down.
 #endif
 }
 

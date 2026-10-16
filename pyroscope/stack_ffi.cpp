@@ -2,6 +2,7 @@
 #include "pyroscope_ffi.h"
 #include "sampler.hpp"
 #include "span_links.hpp"
+#include "cpu_timer.hpp"
 
 #include "echion/echion_sampler.h"
 #include "echion/vm.h"
@@ -22,7 +23,10 @@ pyroscope_stack_configure(double interval_s,
                           uint64_t max_sampling_period_us,
                           double baseline_core_pct,
                           uint32_t p_stable_window_s,
-                          double p_stable_percentile)
+                          double p_stable_percentile,
+                          bool cpu_timer_enabled,
+                          uint64_t cpu_timer_interval_ms
+                          )
 {
     static std::once_flag safe_copy_once;
     std::call_once(safe_copy_once, init_safe_copy, fast_copy);
@@ -41,6 +45,8 @@ pyroscope_stack_configure(double interval_s,
     sampler.set_interval(interval_s);
     sampler.get_echion().set_oncpu(oncpu);
     sampler.set_fast_copy_warmup_seconds(fast_copy_warmup_s);
+    Datadog::CpuTimer::Engine::get().configure(cpu_timer_enabled, cpu_timer_interval_ms);
+
 }
 
 extern "C" uint64_t
@@ -88,7 +94,7 @@ pyroscope_stack_stop()
 }
 
 extern "C" bool
-pyroscope_stack_take_sampling_thread_error() noexcept
+pyroscope_stack_take_sampling_thread_error()
 {
     return Datadog::Sampler::get().take_sampling_thread_error().has_value();
 }
@@ -109,6 +115,7 @@ extern "C" void
 pyroscope_stack_uninstall_segv_handler()
 {
     if (fast_copy_active) {
+        Datadog::CpuTimer::Engine::get().disable_for_fault_handler_swap();
         uninstall_segv_handler();
     }
 }
@@ -122,16 +129,28 @@ pyroscope_stack_reinstall_segv_handler()
 }
 
 extern "C" void
-pyroscope_stack_register_thread(uint64_t id, uint64_t native_id)
+pyroscope_stack_register_thread_gil(uint64_t id, uint64_t native_id)
 {
-    Datadog::Sampler::get().register_thread(id, native_id, "");
+    PyThreadState* tstate = PyThreadState_Get();
+    // stack.register_thread may be called for already-active threads
+    // from a different Python thread. Only pass a PyThreadState pointer when it
+    // belongs to the registered thread; timer_create signal capture dereferences
+    // this pointer on the target native thread.
+    if (tstate != nullptr && tstate->thread_id != id) {
+        tstate = nullptr;
+    }
+    Py_BEGIN_ALLOW_THREADS;
+    Datadog::Sampler::get().register_thread(id, native_id, "", tstate);
+    Py_END_ALLOW_THREADS;
 }
 
 extern "C" void
-pyroscope_stack_unregister_thread(uint64_t id)
+pyroscope_stack_unregister_thread_gil(uint64_t id)
 {
+    Py_BEGIN_ALLOW_THREADS;
     Datadog::Sampler::get().unregister_thread(id);
     Datadog::SpanLinks::get_instance().unlink_span(id);
+    Py_END_ALLOW_THREADS;
 }
 
 extern "C" void

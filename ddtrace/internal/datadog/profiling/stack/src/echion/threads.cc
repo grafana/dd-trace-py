@@ -1294,7 +1294,7 @@ ThreadInfo::sample_cpu_timer(EchionSampler& echion,
                              const Datadog::CpuTimer::RawSample& raw)
 {
     auto& renderer = echion.renderer();
-    renderer.render_cpu_sample_begin(name, cpu_time_us, thread_id, native_id);
+    renderer.render_cpu_sample_begin(name, cpu_time_us, thread_id, native_id, echion.oncpu());
 
     current_tasks.clear();
     current_greenlets.clear();

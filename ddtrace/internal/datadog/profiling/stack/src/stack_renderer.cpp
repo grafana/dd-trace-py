@@ -80,7 +80,8 @@ void
 StackRenderer::render_cpu_sample_begin(std::string_view name,
                                        microsecond_t cpu_time_us,
                                        uintptr_t thread_id,
-                                       unsigned long native_id)
+                                       unsigned long native_id,
+                                       bool oncpu)
 {
     static bool failed = false;
     if (failed) {
@@ -101,6 +102,8 @@ StackRenderer::render_cpu_sample_begin(std::string_view name,
     sample->push_threadinfo(static_cast<int64_t>(thread_id), static_cast<int64_t>(native_id), name);
     sample->push_cputime(1000 * cpu_time_us, 1);
 
+    thread_state.builder_type = oncpu ? PprofBuilderType_OnCpu : PprofBuilderType_CpuWall;
+    sample->set_builder_type(oncpu ? PprofBuilderType_OnCpu : PprofBuilderType_CpuWall);
     thread_state.id = thread_id;
     thread_state.native_id = native_id;
     thread_state.name = std::string(name);

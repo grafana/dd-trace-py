@@ -97,7 +97,8 @@ class StackRenderer
     void render_cpu_sample_begin(std::string_view name,
                                  microsecond_t cpu_time_us,
                                  uintptr_t thread_id,
-                                 unsigned long native_id);
+                                 unsigned long native_id,
+                                 bool oncpu);
     void render_task_begin(std::string_view task_name,
                            bool on_cpu,
                            uint64_t task_id,
