@@ -1075,32 +1075,6 @@ stack_fast_copy_memory_active(PyObject* Py_UNUSED(self), PyObject* Py_UNUSED(arg
 }
 
 static PyObject*
-stack_set_fast_copy_warmup_seconds(PyObject* Py_UNUSED(self), PyObject* args)
-{
-    double seconds_value = 0.0;
-
-    if (!PyArg_ParseTuple(args, "d", &seconds_value)) {
-        return NULL;
-    }
-
-    if (!std::isfinite(seconds_value) || seconds_value < 0.0) {
-        PyErr_SetString(PyExc_ValueError,
-                        "_set_fast_copy_warmup_seconds requires a finite, non-negative number of seconds");
-        return NULL;
-    }
-
-    if (Sampler::get().is_running()) {
-        PyErr_SetString(PyExc_RuntimeError,
-                        "_set_fast_copy_warmup_seconds must be called before the sampler is started");
-        return NULL;
-    }
-
-    Sampler::get().set_fast_copy_warmup_seconds(seconds_value);
-
-    Py_RETURN_NONE;
-}
-
-static PyObject*
 stack_take_sampling_thread_error(PyObject* Py_UNUSED(self), PyObject* Py_UNUSED(args))
 {
     std::optional<SamplingThreadError> error;
@@ -1201,10 +1175,6 @@ static PyMethodDef stack_methods[] = {
       stack_fast_copy_memory_active,
       METH_NOARGS,
       "Return True if the fast safe_memcpy copy path is currently active" },
-    { "_set_fast_copy_warmup_seconds",
-      stack_set_fast_copy_warmup_seconds,
-      METH_VARARGS,
-      "Test-only: set the fast-copy startup warmup duration in seconds (before start)" },
     { "take_sampling_thread_error",
       stack_take_sampling_thread_error,
       METH_NOARGS,
