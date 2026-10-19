@@ -12,7 +12,7 @@ class SampleManager
     static Sample* start_sample()
     {
         static thread_local Sample sample{ ProfilerState::get().max_nframes.load(),
-                                           PprofBuilderType_CpuWall };
+                                           PprofBuilderType_OnCpu };
         sample.clear();
         return &sample;
     }

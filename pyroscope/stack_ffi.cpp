@@ -9,13 +9,10 @@
 #include <cstdint>
 #include <mutex>
 
-extern "C" void
+extern "C" bool
 pyroscope_stack_configure(double interval_s,
-                          bool fast_copy,
-                          double fast_copy_warmup_s,
                           uint32_t max_nframes,
                           uint32_t max_threads,
-                          bool oncpu,
                           bool adaptive_sampling,
                           double target_overhead,
                           uint64_t max_sampling_period_us,
@@ -24,8 +21,7 @@ pyroscope_stack_configure(double interval_s,
                           double p_stable_percentile)
 {
     static std::once_flag safe_copy_once;
-    std::call_once(safe_copy_once, init_safe_copy, fast_copy);
-    set_fast_copy_enabled(safe_memcpy_initialized);
+    std::call_once(safe_copy_once, init_safe_copy);
     Datadog::SampleManager::set_max_nframes(max_nframes);
     auto& sampler = Datadog::Sampler::get();
     sampler.set_max_frames(max_nframes);
@@ -37,30 +33,14 @@ pyroscope_stack_configure(double interval_s,
     sampler.set_p_stable_window_s(p_stable_window_s);
     sampler.set_p_stable_percentile(p_stable_percentile);
     sampler.set_interval(interval_s);
-    sampler.get_echion().set_oncpu(oncpu);
-    sampler.set_fast_copy_warmup_seconds(fast_copy_warmup_s);
+    sampler.get_echion().set_oncpu(true);
+    return safe_memcpy_initialized && segv_handler_installed();
 }
 
 extern "C" uint64_t
 pyroscope_stack_interval_us()
 {
     return Datadog::Sampler::get().get_interval_us();
-}
-
-extern "C" bool
-pyroscope_stack_is_safe_copy_failed()
-{
-#if defined PL_LINUX
-    return failed_safe_copy;
-#else
-    return false;
-#endif
-}
-
-extern "C" bool
-pyroscope_stack_fast_copy_initialized()
-{
-    return safe_memcpy_initialized;
 }
 
 extern "C" bool
@@ -89,34 +69,6 @@ extern "C" bool
 pyroscope_stack_take_sampling_thread_error() noexcept
 {
     return Datadog::Sampler::get().take_sampling_thread_error().has_value();
-}
-
-extern "C" uint8_t
-pyroscope_stack_pause_sampling()
-{
-    return static_cast<uint8_t>(Datadog::Sampler::get().pause());
-}
-
-extern "C" void
-pyroscope_stack_resume_sampling()
-{
-    Datadog::Sampler::get().resume();
-}
-
-extern "C" void
-pyroscope_stack_uninstall_segv_handler()
-{
-    if (fast_copy_active) {
-        uninstall_segv_handler();
-    }
-}
-
-extern "C" void
-pyroscope_stack_reinstall_segv_handler()
-{
-    if (fast_copy_active) {
-        init_segv_catcher();
-    }
 }
 
 extern "C" void

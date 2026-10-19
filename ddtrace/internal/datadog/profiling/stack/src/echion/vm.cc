@@ -82,67 +82,31 @@ probe_process_vm_readv()
     return result == static_cast<ssize_t>(sizeof(src));
 }
 
-// Pyroscope patch: called from pyroscope_stack_configure, not a constructor; no env opt-out.
+// Pyroscope patch: called from pyroscope_stack_configure, not a constructor; safe_memcpy is mandatory.
 void
-init_safe_copy(bool fast_copy_requested)
+init_safe_copy()
 {
-    // Always probe process_vm_readv so we know whether it is a valid fallback.
-    process_vm_readv_available = probe_process_vm_readv();
-
-    // Honor the fast-copy opt-out: when not requested or when Python is
-    // embedded, skip installing the SIGSEGV/SIGBUS handlers entirely.
-    // Embedded interpreters must never use safe_memcpy because the host process
-    // owns the signal handlers.
-    if (!fast_copy_requested || is_python_embedded()) {
-        fast_copy_user_disabled = true;
-        if (process_vm_readv_available) {
-            safe_copy = process_vm_readv;
-        } else {
-            fprintf(stderr, "Failed to initialize safe copy interface\n");
-            failed_safe_copy = true;
-        }
-        return;
-    }
-
-    // Try safe_memcpy (fast path) first.
     if (init_segv_catcher() == 0) {
         safe_copy = safe_memcpy_wrapper;
         fast_copy_active = true;
         safe_memcpy_initialized = true;
-    } else {
-        // std::cerr might not have been fully initialized at this point.
-        fprintf(stderr, "Failed to initialize segv catcher. Trying process_vm_readv.\n");
-        if (process_vm_readv_available) {
-            safe_copy = process_vm_readv;
-            mark_fast_copy_syscall_fallback();
-        } else {
-            fprintf(stderr, "Failed to initialize safe copy interface\n");
-            failed_safe_copy = true;
-        }
+        return;
     }
+    fprintf(stderr, "Failed to initialize segv catcher\n");
+    failed_safe_copy = true;
 }
 #elif defined PL_DARWIN
-// Pyroscope patch: called from pyroscope_stack_configure, not a constructor; no env opt-out.
+// Pyroscope patch: called from pyroscope_stack_configure, not a constructor; safe_memcpy is mandatory.
 void
-init_safe_copy(bool fast_copy_requested)
+init_safe_copy()
 {
-    // Honor the fast-copy opt-out: skip installing signal handlers when not
-    // requested or when Python is embedded (host owns signal handlers).
-    if (!fast_copy_requested || is_python_embedded()) {
-        fast_copy_user_disabled = true;
-        return;
-    }
-
     if (init_segv_catcher() == 0) {
         safe_copy = safe_memcpy_wrapper;
         fast_copy_active = true;
         safe_memcpy_initialized = true;
         return;
     }
-
-    // std::cerr might not be fully initialized at constructor time.
-    fprintf(stderr, "Failed to initialize segv catcher. Using mach_vm_read_overwrite instead.\n");
-    mark_fast_copy_syscall_fallback();
+    fprintf(stderr, "Failed to initialize segv catcher\n");
 }
 #endif // PL_DARWIN
 
