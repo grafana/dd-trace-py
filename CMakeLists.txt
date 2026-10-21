@@ -5,6 +5,12 @@ include(FetchContent)
 
 project(_memalloc)
 
+if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/dd-trace-py/ddtrace)
+    set(DDTRACE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dd-trace-py)
+else ()
+    set(DDTRACE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
+endif ()
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -55,8 +61,8 @@ if (NOT TARGET Python3::Python)
     message(STATUS "Python3::Python target not found, using include dirs only")
 endif ()
 
-set(COLLECTOR_DIR ${CMAKE_CURRENT_SOURCE_DIR}/ddtrace/profiling/collector)
-set(PROFILING_DIR ${CMAKE_CURRENT_SOURCE_DIR}/ddtrace/internal/datadog/profiling)
+set(COLLECTOR_DIR ${DDTRACE_DIR}/ddtrace/profiling/collector)
+set(PROFILING_DIR ${DDTRACE_DIR}/ddtrace/internal/datadog/profiling)
 
 set(MEMALLOC_SOURCES
         ${COLLECTOR_DIR}/_memalloc.cpp
@@ -67,7 +73,7 @@ set(MEMALLOC_SOURCES
 
 set(STACK_SOURCES
         ${PROFILING_DIR}/dd_wrapper/src/profiler_state.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/pyroscope/stack_ffi.cpp
+        ${DDTRACE_DIR}/pyroscope/stack_ffi.cpp
         ${PROFILING_DIR}/stack/src/echion/danger.cc
         ${PROFILING_DIR}/stack/src/echion/frame.cc
         ${PROFILING_DIR}/stack/src/echion/greenlets.cc
@@ -92,10 +98,10 @@ set(FULL_EXTENSION_NAME "datadog_mem_profiler")
 
 add_library(pyroscope_common INTERFACE)
 target_include_directories(pyroscope_common INTERFACE
-        ${CMAKE_CURRENT_SOURCE_DIR}/pyroscope
+        ${DDTRACE_DIR}/pyroscope
         ${COLLECTOR_DIR}
         ${PROFILING_DIR}
-        ${CMAKE_CURRENT_SOURCE_DIR}/../rust/include
+        ${DDTRACE_DIR}/../rust/include
 )
 target_include_directories(pyroscope_common SYSTEM INTERFACE ${Python3_INCLUDE_DIRS})
 
@@ -144,6 +150,6 @@ endif ()
 # we merge it explicitly via bundle_static_library below.
 target_link_libraries(${FULL_EXTENSION_NAME} PRIVATE absl::flat_hash_map)
 
-include(${CMAKE_CURRENT_SOURCE_DIR}/BundleStaticLibrary.cmake)
+include(${DDTRACE_DIR}/BundleStaticLibrary.cmake)
 
 bundle_static_library(${FULL_EXTENSION_NAME} ${FULL_EXTENSION_NAME}_bundled)
