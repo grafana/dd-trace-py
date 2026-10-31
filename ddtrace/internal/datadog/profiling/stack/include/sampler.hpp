@@ -1,5 +1,7 @@
 #pragma once
 
+#define PY_SSIZE_T_CLEAN
+#define Py_BUILD_CORE
 #include <Python.h>
 
 #include <algorithm>
@@ -17,6 +19,7 @@
 
 #include "constants.hpp"
 
+#include "echion/interp.h"
 #include "echion/task_name.h"
 #include "echion/timing.h"
 
@@ -99,6 +102,7 @@ class Sampler
     unsigned int max_threads_per_sample = g_default_max_threads_per_sample;
     bool gc_tracking_enabled_ = false;
     std::minstd_rand rng{ std::random_device{}() };
+    std::vector<InterpreterInfo> interpreter_candidates;
 
     struct ThreadCandidate
     {
@@ -135,6 +139,7 @@ class Sampler
     std::atomic<uint64_t> greenlet_native_id_generation_{ 0 };
 
     void atfork_child();
+    void register_current_thread_if_missing();
     friend void stack_atfork_prepare();
     friend void stack_atfork_parent();
     friend void stack_atfork_child();
@@ -150,6 +155,7 @@ class Sampler
     void stop();
     PauseResult pause();
     void resume();
+    void register_fork_cleanup();
     void register_thread(uint64_t id, uint64_t native_id, const char* name, PyThreadState* tstate = nullptr);
     void unregister_thread(uint64_t id);
     void track_asyncio_loop(uintptr_t thread_id, PyObject* loop);

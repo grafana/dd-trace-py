@@ -386,6 +386,8 @@ extern "C" void memalloc_stop()
         PyMemAllocatorEx restore = *saved;
         PyMem_SetAllocator(PYMEM_DOMAIN_OBJ, &restore);
     }
+    /* Pyroscope patch: deliberately leave g_saved_alloc_pub pointing at the valid saved
+     * allocator; see the MEM-domain comment below. */
 
 #ifdef _PY312_AND_LATER
     if (memalloc_mem_installed) {
@@ -395,8 +397,7 @@ extern "C" void memalloc_stop()
             PyMem_SetAllocator(PYMEM_DOMAIN_MEM, &restore_mem);
         }
         /* Pyroscope patch: deliberately leave g_saved_alloc_mem_pub pointing at the valid saved
-         * allocator (mirroring the OBJ path above, which never nulls
-         * g_saved_alloc_pub). Once PyMem_SetAllocator has restored the real MEM
+         * allocator (same as g_saved_alloc_pub above). Once PyMem_SetAllocator has restored the real MEM
          * allocator, CPython no longer dispatches frees to our hook, so a stale
          * pointer is harmless. Nulling it here would make an in-flight
          * memalloc_free_mem load NULL and fast-exit without delegating to the
